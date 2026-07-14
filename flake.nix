@@ -53,7 +53,7 @@
           });
 
         toolInfo = lib.mapAttrs (_toolName: package: {
-          description = package.meta.description;
+          inherit (package.meta) description;
           program = lib.getExe package;
         }) toolPackages;
 
@@ -150,6 +150,7 @@
         apps.default = {
           type = "app";
           program = dispatcherProgram;
+          meta.description = "Generated dispatcher for the repository's tools.";
         };
 
         checks = toolChecks // {
