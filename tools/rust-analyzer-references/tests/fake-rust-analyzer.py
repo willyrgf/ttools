@@ -50,7 +50,9 @@ def utf16_units(line: str, index: int) -> int:
     return sum(len(character.encode("utf-16-le")) // 2 for character in line[:index])
 
 
-def occurrence(lines: list[str], name: str, occurrence_number: int = 0) -> tuple[int, int]:
+def occurrence(
+    lines: list[str], name: str, occurrence_number: int = 0
+) -> tuple[int, int]:
     seen = 0
     for line_number, line in enumerate(lines):
         start = 0
@@ -58,9 +60,13 @@ def occurrence(lines: list[str], name: str, occurrence_number: int = 0) -> tuple
             index = line.find(name, start)
             if index < 0:
                 break
-            if (index == 0 or not (line[index - 1].isalnum() or line[index - 1] == "_")) and (
+            if (
+                index == 0 or not (line[index - 1].isalnum() or line[index - 1] == "_")
+            ) and (
                 index + len(name) == len(line)
-                or not (line[index + len(name)].isalnum() or line[index + len(name)] == "_")
+                or not (
+                    line[index + len(name)].isalnum() or line[index + len(name)] == "_"
+                )
             ):
                 if seen == occurrence_number:
                     return line_number, utf16_units(line, index)
@@ -73,7 +79,10 @@ def range_for(lines: list[str], name: str, occurrence_number: int = 0) -> dict:
     line_number, character = occurrence(lines, name, occurrence_number)
     return {
         "start": {"line": line_number, "character": 0},
-        "end": {"line": line_number, "character": utf16_units(lines[line_number], len(lines[line_number]))},
+        "end": {
+            "line": line_number,
+            "character": utf16_units(lines[line_number], len(lines[line_number])),
+        },
     }
 
 
@@ -85,7 +94,10 @@ def symbol(name: str, kind: int, lines: list[str], occurrence_number: int = 0) -
         "range": range_for(lines, name, occurrence_number),
         "selectionRange": {
             "start": {"line": line_number, "character": character},
-            "end": {"line": line_number, "character": character + utf16_units(name, len(name))},
+            "end": {
+                "line": line_number,
+                "character": character + utf16_units(name, len(name)),
+            },
         },
     }
 
@@ -97,7 +109,9 @@ def document_symbols(lines: list[str]) -> list[dict]:
             continue
         item = symbol(name, kind, lines)
         if children:
-            item["children"] = [symbol(child, SYMBOLS[child][0], lines) for child in children]
+            item["children"] = [
+                symbol(child, SYMBOLS[child][0], lines) for child in children
+            ]
         result.append(item)
     return result
 
@@ -138,11 +152,7 @@ def main() -> int:
             if method == "exit":
                 return 0
             continue
-        if (
-            retry_method
-            and method == f"textDocument/{retry_method}"
-            and not retried
-        ):
+        if retry_method and method == f"textDocument/{retry_method}" and not retried:
             retried = True
             send(
                 {
@@ -159,7 +169,9 @@ def main() -> int:
         elif method == "textDocument/documentSymbol":
             uri = message["params"]["textDocument"]["uri"]
             _, lines = source_for_uri(uri)
-            send({"jsonrpc": "2.0", "id": request_id, "result": document_symbols(lines)})
+            send(
+                {"jsonrpc": "2.0", "id": request_id, "result": document_symbols(lines)}
+            )
         elif method == "textDocument/references":
             uri = message["params"]["textDocument"]["uri"]
             path, lines = source_for_uri(uri)
@@ -170,7 +182,13 @@ def main() -> int:
                 if occurrence(lines, name)[0] == position["line"]
                 and occurrence(lines, name)[1] == position["character"]
             )
-            send({"jsonrpc": "2.0", "id": request_id, "result": references(name, path, lines)})
+            send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": references(name, path, lines),
+                }
+            )
         elif method == "shutdown":
             send({"jsonrpc": "2.0", "id": request_id, "result": None})
         else:

@@ -306,7 +306,7 @@ def parse_args() -> argparse.Namespace:
         description=(
             "Report Rust definitions with an exact rust-analyzer workspace "
             "reference count."
-        )
+        ),
     )
     parser.add_argument(
         "paths",
@@ -401,7 +401,11 @@ def discover_rust_files(root: Path, paths: list[str]) -> list[Path]:
     scan_roots = [Path(path) for path in paths] if paths else [root]
     files: list[Path] = []
     for scan_root in scan_roots:
-        resolved = (root / scan_root).resolve() if not scan_root.is_absolute() else scan_root.resolve()
+        resolved = (
+            (root / scan_root).resolve()
+            if not scan_root.is_absolute()
+            else scan_root.resolve()
+        )
         if resolved.is_file():
             if resolved.suffix == ".rs":
                 files.append(resolved)
@@ -463,12 +467,18 @@ def collect_candidates(
     seen: set[tuple[str, int, int, str]] = set()
     for index, path in enumerate(files, start=1):
         if client.verbose:
-            print(f"document symbols {index}/{len(files)} {relative(path, root)}", file=sys.stderr)
+            print(
+                f"document symbols {index}/{len(files)} {relative(path, root)}",
+                file=sys.stderr,
+            )
         source = sources[path]
-        symbols = client.request_with_retries(
-            "textDocument/documentSymbol",
-            {"textDocument": {"uri": path_to_uri(path)}},
-        ) or []
+        symbols = (
+            client.request_with_retries(
+                "textDocument/documentSymbol",
+                {"textDocument": {"uri": path_to_uri(path)}},
+            )
+            or []
+        )
         lines = source.splitlines()
         for symbol, parent_kind in flatten_symbols(symbols):
             candidate = candidate_from_symbol(
@@ -492,7 +502,13 @@ def collect_candidates(
             if key not in seen:
                 seen.add(key)
                 candidates.append(candidate)
-    candidates.sort(key=lambda item: (item.definition.path, item.definition.line, item.definition.column))
+    candidates.sort(
+        key=lambda item: (
+            item.definition.path,
+            item.definition.line,
+            item.definition.column,
+        )
+    )
     return candidates
 
 
@@ -572,7 +588,9 @@ def declaration_kind(
         return None
     end_line = min(end_line, start_line + 20, len(lines) - 1)
     haystack = "\n".join(lines[start_line : end_line + 1])
-    pattern = re.compile(r"\b(enum|struct|trait|type|union)\s+" + re.escape(name) + r"\b")
+    pattern = re.compile(
+        r"\b(enum|struct|trait|type|union)\s+" + re.escape(name) + r"\b"
+    )
     match = pattern.search(haystack)
     return TYPE_KEYWORDS[match.group(1)] if match else None
 
@@ -675,7 +693,9 @@ def reference_locations(
             source = path.read_text(encoding="utf-8")
             sources[path] = source
         lines = (source or "").splitlines()
-        if not isinstance(start.get("line"), int) or not isinstance(start.get("character"), int):
+        if not isinstance(start.get("line"), int) or not isinstance(
+            start.get("character"), int
+        ):
             continue
         locations.append(make_location(path, start, root, lines))
     locations.sort(key=lambda item: (item.path, item.line, item.column))
@@ -826,9 +846,7 @@ def emit_report(
             f"({len(references)} reference(s))"
         )
         for reference in references:
-            print(
-                f"  ref: {reference.path}:{reference.line}:{reference.column}"
-            )
+            print(f"  ref: {reference.path}:{reference.line}:{reference.column}")
             if reference.snippet:
                 print(f"       {reference.snippet}")
     print(
