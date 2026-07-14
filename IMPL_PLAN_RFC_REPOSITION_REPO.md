@@ -28,7 +28,7 @@ implementation choice:
    explicitly before claiming compliance. Do not invent a silent substitute.
 6. Commit subjects are concise, lowercase, one-line messages. Do not add a
    commit body or author, co-author, review, or other trailer metadata.
-7. If architecture/design decisions are unclear, spawn an architect-agent 
+7. If architecture/design decisions are unclear, spawn an architect-agent
    and pass these rules along.
 
 ## Current baseline
