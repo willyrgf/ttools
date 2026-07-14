@@ -70,7 +70,7 @@ jobs:
             exit 1
           fi
 
-          fixture_expr="let pkgs = import <nixpkgs> {}; in pkgs.runCommand \"nix-cleanup-ci-fixture\" {} \"echo fixture > \\$out\""
+          fixture_expr="let pkgs = import <nixpkgs> {}; in pkgs.runCommand \"nix-cleanup-ci-fixture\" {} \"echo fixture > \$out\""
           nix build --print-build-logs --show-trace --impure --out-link ci-gc-fixture --expr "$fixture_expr"
 
           store_path="$(readlink -f ci-gc-fixture)"
