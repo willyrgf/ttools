@@ -32,7 +32,7 @@ jobs:
       - name: Run flake checks
         run: nix flake check --print-build-logs --show-trace
 
-      - name: Smoke-test dispatcher and tool help
+      - name: Smoke-test ttools dispatcher and tiny-tool help
         run: |
           set -euo pipefail
           nix run . -- --help

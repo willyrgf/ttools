@@ -1,5 +1,5 @@
 {
-  description = "A small collection of useful command-line tools.";
+  description = "ttools: a collection of tiny command-line tools.";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs";
   inputs.flake-utils.url = "github:numtide/flake-utils";
@@ -69,7 +69,7 @@
           ''
         ) toolNames);
 
-        toolsEntrypoint = pkgs.writeShellScriptBin "tools" ''
+        ttoolsEntrypoint = pkgs.writeShellScriptBin "ttools" ''
           set -euo pipefail
 
           _catalog() {
@@ -78,15 +78,15 @@
           }
 
           _usage() {
-            printf '%s\n' 'tools - a collection of useful command-line tools.'
+            printf '%s\n' 'ttools - a collection of tiny command-line tools.'
             printf '\n'
             _catalog
             printf '\n'
             printf '%s\n' 'Usage:'
-            printf '%s\n' '  tools'
-            printf '%s\n' '  tools list'
-            printf '%s\n' '  tools --help'
-            printf '%s\n' '  tools <tool-name> [args...]'
+            printf '%s\n' '  ttools'
+            printf '%s\n' '  ttools list'
+            printf '%s\n' '  ttools --help'
+            printf '%s\n' '  ttools <tool-name> [args...]'
           }
 
           _error() {
@@ -119,7 +119,7 @@
               ;;
           esac
         '';
-        dispatcherProgram = "${toolsEntrypoint}/bin/tools";
+        dispatcherProgram = "${ttoolsEntrypoint}/bin/ttools";
         qualityPackages = [
           pkgs.actionlint
           pkgs.bash
@@ -144,13 +144,13 @@
       in
       {
         packages = toolPackages // {
-          default = toolsEntrypoint;
+          default = ttoolsEntrypoint;
         };
 
         apps.default = {
           type = "app";
           program = dispatcherProgram;
-          meta.description = "Generated dispatcher for the repository's tools.";
+          meta.description = "Generated ttools dispatcher for the repository's tiny tools.";
         };
 
         checks = toolChecks // {
@@ -174,7 +174,7 @@
           repo-deadnix = mkRepoCheck "repo-deadnix" ''
             deadnix .
           '';
-          repo-dispatcher-smoke = pkgs.runCommand "repo-dispatcher-smoke" {
+          repo-ttools-smoke = pkgs.runCommand "repo-ttools-smoke" {
             src = ./.;
             nativeBuildInputs = [ pkgs.coreutils ];
           } ''
@@ -183,7 +183,7 @@
 
             help_output="$(${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" --help)"
             case "$help_output" in
-              *"Available tools:"*"git-history"*"nix-cleanup"*) ;;
+              *"ttools - a collection of tiny command-line tools."*"Available tools:"*"git-history"*"nix-cleanup"*) ;;
               *)
                 printf '%s\n' "dispatcher help output is incomplete" >&2
                 exit 1

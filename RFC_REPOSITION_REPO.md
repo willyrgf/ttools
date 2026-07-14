@@ -1,21 +1,21 @@
-# RFC: Reposition the repository as `tools`
+# RFC: Rebrand the repository as `ttools`
 
 - Status: Implemented
 - Date: 2026-07-14
 
 ## Summary
 
-Reposition the current `nix-cleanup` repository as a small collection of useful
-tools published from `github:willyrgf/tools`.
+Reposition the current `nix-cleanup` repository as `ttools`—tiny tools: a small
+collection of focused utilities published from `github:willyrgf/ttools`.
 
 The repository has one public entrypoint. The default Nix app is a dispatcher
-named `tools`, initially exposing `nix-cleanup` and `git-history`:
+named `ttools`, initially exposing `nix-cleanup` and `git-history`:
 
 ```bash
-nix run 'github:willyrgf/tools'
-nix run 'github:willyrgf/tools' -- list
-nix run 'github:willyrgf/tools' -- nix-cleanup --quick
-nix run 'github:willyrgf/tools' -- <tool-name> [args...]
+nix run 'github:willyrgf/ttools'
+nix run 'github:willyrgf/ttools' -- list
+nix run 'github:willyrgf/ttools' -- nix-cleanup --quick
+nix run 'github:willyrgf/ttools' -- <tool-name> [args...]
 ```
 
 The flake discovers tools from the filesystem, packages them independently,
@@ -45,13 +45,13 @@ should not require editing a command list or a manually maintained registry.
 
 ## Command contract
 
-The generated executable is `tools`.
+The generated executable is `ttools`.
 
 ```text
-tools                         Show the catalog and usage.
-tools list                    List available tools.
-tools --help                 Show dispatcher help.
-tools <tool-name> [args...]  Execute one tool and pass arguments through.
+ttools                         Show the catalog and usage.
+ttools list                    List available tools.
+ttools --help                 Show dispatcher help.
+ttools <tool-name> [args...]  Execute one tool and pass arguments through.
 ```
 
 The initial catalog is:
@@ -298,7 +298,7 @@ toolInfo = lib.mapAttrs (toolName: package: {
 }) toolPackages;
 ```
 
-The default `tools` executable is generated directly in the flake from
+The default `ttools` executable is generated directly in the flake from
 `toolInfo`. It contains:
 
 - a sorted catalog of names and descriptions;
@@ -313,12 +313,12 @@ The outputs should look conceptually like this:
 
 ```nix
 packages = toolPackages // {
-  default = toolsEntrypoint;
+  default = ttoolsEntrypoint;
 };
 
 apps.default = {
   type = "app";
-  program = "${toolsEntrypoint}/bin/tools";
+  program = "${ttoolsEntrypoint}/bin/ttools";
 };
 ```
 
@@ -335,8 +335,8 @@ small.
 The flake should also expose individual packages:
 
 ```bash
-nix run 'github:willyrgf/tools#nix-cleanup' -- --quick
-nix run 'github:willyrgf/tools#git-history' -- review --base origin/main
+nix run 'github:willyrgf/ttools#nix-cleanup' -- --quick
+nix run 'github:willyrgf/ttools#git-history' -- review --base origin/main
 ```
 
 That provides a smaller escape hatch for a tool with a large language runtime.
@@ -387,29 +387,29 @@ itself must not add or reinterpret tool-specific safety flags such as
    and fixture-based tests together.
 3. Replace the current single-tool flake wiring with convention-driven tool
    discovery and generated dispatch.
-4. Add the default `tools` app, package outputs, and deterministic checks for
+4. Add the default `ttools` app, package outputs, and deterministic checks for
    discovered tools.
 5. Apply the initial-tool conformance changes to both CLIs and update their
    tests to make the conventions executable examples.
 6. Update the README, AGENTS guidance, CI workflow, development shells, and
    examples to describe the final interfaces.
 7. Validate the local commands before renaming the GitHub repository to
-   `tools`.
+   `ttools`.
 8. Add future utilities as new `tools/<name>` directories that follow the
    package, check, CLI, and safety conventions.
 
 The new canonical cleanup command is:
 
 ```bash
-nix run 'github:willyrgf/tools' -- nix-cleanup --older-than 30d
+nix run 'github:willyrgf/ttools' -- nix-cleanup --older-than 30d
 ```
 
 The initial Git history commands are:
 
 ```bash
-nix run 'github:willyrgf/tools' -- git-history review --base origin/main
-nix run 'github:willyrgf/tools' -- git-history fix-messages --base origin/main --max-subject-length 72
-nix run 'github:willyrgf/tools' -- git-history add-prefix 'cleanup: ' --base origin/main
+nix run 'github:willyrgf/ttools' -- git-history review --base origin/main
+nix run 'github:willyrgf/ttools' -- git-history fix-messages --base origin/main --max-subject-length 72
+nix run 'github:willyrgf/ttools' -- git-history add-prefix 'cleanup: ' --base origin/main
 ```
 
 Because the latter two commands change commit IDs, documentation should

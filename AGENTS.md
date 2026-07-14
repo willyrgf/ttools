@@ -2,10 +2,11 @@
 
 ## Project structure
 
-The repository is a convention-driven collection of self-contained tools:
+`ttools` means tiny tools: this repository is a convention-driven collection
+of self-contained tools:
 
 - `flake.nix` discovers and packages immediate `tools/<name>` directories,
-  generates the `tools` dispatcher, and composes quality checks.
+  generates the `ttools` dispatcher, and composes quality checks.
 - `tools/<name>/<source>` contains one public tool and its implementation.
 - `tools/<name>/package.nix` returns the executable package for that tool.
 - `tools/<name>/check.nix` returns the deterministic local quality check.

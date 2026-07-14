@@ -1,31 +1,32 @@
-# tools
+# ttools
 
-`tools` is a small collection of useful command-line tools published from
-`github:willyrgf/tools`. The default Nix app is a generated dispatcher for the
-initial `nix-cleanup` and `git-history` tools.
+`ttools` means **tiny tools**: a small collection of focused command-line tools
+published from `github:willyrgf/ttools`. The default Nix app is a generated
+dispatcher for the initial `nix-cleanup` and `git-history` tools.
 
 ## Dispatcher
 
-Run the catalog, list tools, or dispatch one tool:
+Run the tiny-tool catalog, list tools, or dispatch one tool:
 
 ```bash
-nix run 'github:willyrgf/tools'
-nix run 'github:willyrgf/tools' -- list
-nix run 'github:willyrgf/tools' -- nix-cleanup --help
-nix run 'github:willyrgf/tools' -- git-history --help
+nix run 'github:willyrgf/ttools'
+nix run 'github:willyrgf/ttools' -- list
+nix run 'github:willyrgf/ttools' -- nix-cleanup --help
+nix run 'github:willyrgf/ttools' -- git-history --help
 ```
 
-The dispatcher consumes only the tool name. Every remaining argument, standard
-input, output stream, signal, and exit status is passed directly to that tool.
+The `ttools` dispatcher consumes only the tool name. Every remaining argument,
+standard input, output stream, signal, and exit status is passed directly to
+that tool.
 Tool names are lowercase kebab-case. `help`, `list`, `version`, and `default`
 are reserved by the dispatcher.
 
 Direct package outputs are available when the dispatcher closure is not wanted:
 
 ```bash
-nix run 'github:willyrgf/tools#nix-cleanup' -- --quick
-nix run 'github:willyrgf/tools#git-history' -- review --base origin/main
-nix build 'github:willyrgf/tools#default'
+nix run 'github:willyrgf/ttools#nix-cleanup' -- --quick
+nix run 'github:willyrgf/ttools#git-history' -- review --base origin/main
+nix build 'github:willyrgf/ttools#default'
 ```
 
 ## `nix-cleanup`
@@ -111,9 +112,10 @@ diagnostics and progress go to stderr.
 
 ## Development and validation
 
-The flake discovers each immediate `tools/<name>` directory. A tool directory
-must contain its source, `package.nix`, `check.nix`, and local tests. Adding a
-tool does not require editing a root command registry.
+The public collection is named `ttools`; its internal `tools/<name>` directories
+hold the individual tiny tools. Each directory must contain its source,
+`package.nix`, `check.nix`, and local tests. Adding a tool does not require
+editing a root command registry.
 
 Useful local commands:
 
@@ -132,9 +134,9 @@ nix develop
 ```
 
 The root checks run every discovered tool check plus Bash syntax, shellcheck,
-shfmt, actionlint, statix, deadnix, and dispatcher smoke tests. Tool checks use
-temporary fixtures; do not run cleanup against a real store or rewrite this
-repository's history while developing.
+shfmt, actionlint, statix, deadnix, and ttools dispatcher smoke tests. Tool
+checks use temporary fixtures; do not run cleanup against a real store or
+rewrite this repository's history while developing.
 
 The pinned `flake.lock` is the dependency source of truth. Update it only as an
 intentional dependency maintenance change, then rerun the complete flake check.

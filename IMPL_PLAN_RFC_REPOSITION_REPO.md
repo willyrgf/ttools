@@ -1,8 +1,8 @@
-# Implementation plan: reposition the repository as `tools`
+# Implementation plan: rebrand the repository as `ttools`
 
 - Source of truth: [RFC_REPOSITION_REPO.md](RFC_REPOSITION_REPO.md)
-- Status: implementation complete; final verification recorded
-- Scope: migrate this repository to the RFC's final two-tool architecture
+- Status: implementation complete; ttools branding synchronized
+- Scope: migrate this repository to the RFC's final `ttools` architecture
 
 This document is an execution plan for the engineer-agent. Work through the
 phases in order, keep the worktree understandable after every commit, and
@@ -78,7 +78,8 @@ tools/
 
 There is no tracked dispatcher template, root `tests/` directory, root
 `nix-cleanup.sh`, root `git-history.sh`, compatibility wrapper, legacy mode, or
-hand-maintained tool registry.
+hand-maintained tool registry. The public dispatcher is named `ttools`; the
+`tools/` directory remains the structural home for individual tiny tools.
 
 ### Package boundary
 
@@ -137,8 +138,8 @@ flags, and it must never invoke `nix run` at runtime.
 Expose:
 
 - `packages.<tool>` for every discovered tool;
-- `packages.default` for the generated `tools` executable; and
-- `apps.default` pointing to the generated `tools` executable.
+- `packages.default` for the generated `ttools` executable; and
+- `apps.default` pointing to the generated `ttools` executable.
 
 Remove the deprecated `defaultPackage` output. The direct `#nix-cleanup` and
 `#git-history` package outputs are canonical per-tool entrypoints, not legacy
@@ -251,7 +252,7 @@ Its `list` output must be deterministic, and its dispatch path must use `exec`.
 Suggested commit:
 
 ```text
-add generated tools dispatcher
+add generated ttools dispatcher
 ```
 
 Verification before committing:
@@ -358,7 +359,7 @@ normalize initial tool cli contracts
 
 ### Phase 6: rewrite documentation and CI
 
-Rewrite `README.md` around the `tools` dispatcher:
+Rewrite `README.md` around the `ttools` dispatcher and tiny-tools identity:
 
 - catalog and `list` behavior;
 - direct package outputs;
@@ -431,8 +432,8 @@ Confirm that these remain intentionally available:
 
 - `packages.nix-cleanup`;
 - `packages.git-history`;
-- `packages.default` for `tools`; and
-- `apps.default` for `tools`.
+- `packages.default` for `ttools`; and
+- `apps.default` for `ttools`.
 
 ## Definition of done
 

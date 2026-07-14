@@ -1,11 +1,11 @@
-# Code Quality Policy
+# ttools Code Quality Policy
 
 This policy applies to every code, test, documentation, build, and workflow
 change in this repository.
 
 ## No Hacks
 
-The repository prioritizes code quality over immediate results.
+`ttools` prioritizes code quality over immediate results.
 
 If a requested change cannot be completed without introducing a local hack,
 workaround, monkey patch, partial solution, or fragile schema shim, stop and
