@@ -328,7 +328,7 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help=(
             "comma-separated kinds: enum,function,method,struct,trait,"
-            "type-alias,union"
+            "type-alias,union, or all"
         ),
     )
     parser.add_argument(
@@ -376,6 +376,9 @@ def parse_args() -> argparse.Namespace:
 
 def parse_kinds(raw: str) -> set[str]:
     kinds = {item.strip() for item in raw.split(",") if item.strip()}
+    if "all" in kinds:
+        kinds.remove("all")
+        kinds.update(SUPPORTED_KINDS)
     unknown = kinds - SUPPORTED_KINDS
     if not kinds:
         raise ValueError("--kinds must contain at least one kind")

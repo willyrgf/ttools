@@ -39,8 +39,9 @@ configuration, such as Cargo metadata or `rust-project.json`. The tool does
 not invoke Cargo or modify the project.
 
 Supported kinds are `enum`, `function`, `method`, `struct`, `trait`,
-`type-alias`, and `union`. `--visibility exported` selects plain `pub` items;
-`--visibility any` includes private and restricted items.
+`type-alias`, and `union`; use `--kinds all` to select all of them.
+`--visibility exported` selects plain `pub` items; `--visibility any` includes
+private and restricted items.
 
 Normal findings go to stdout. Diagnostics and verbose progress go to stderr.
 `--output json` emits a stable machine-readable report. The tool never edits

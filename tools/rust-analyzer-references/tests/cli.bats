@@ -30,6 +30,27 @@ run_tool() {
   [[ "$output" == *"unknown kind(s): nope"* ]]
 }
 
+@test "all expands to every supported kind" {
+  run run_tool --kinds all --count 99 --output json
+
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+assert data["kinds"] == [
+    "enum",
+    "function",
+    "method",
+    "struct",
+    "trait",
+    "type-alias",
+    "union",
+]
+'
+}
+
 @test "negative counts fail validation" {
   run run_tool --kinds function --count -1
 
