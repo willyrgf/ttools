@@ -21,6 +21,7 @@ pkgs.runCommand "${toolName}-check"
     ];
     RUST_ANALYZER_REFERENCES_BIN = lib.getExe package;
     RUST_ANALYZER_REFERENCES_FIXTURE = "${./tests/fixtures/sample.rs}";
+    RUST_ANALYZER_REFERENCES_MANIFEST = "${./tests/fixtures/Cargo.toml}";
     RUST_ANALYZER_REFERENCES_FAKE_SOURCE = fakeAnalyzer;
   }
   ''

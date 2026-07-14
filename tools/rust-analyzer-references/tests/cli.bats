@@ -4,6 +4,7 @@ setup() {
   workspace="$BATS_TEST_TMPDIR/workspace"
   mkdir -p "$workspace"
   cp "$RUST_ANALYZER_REFERENCES_FIXTURE" "$workspace/sample.rs"
+  cp "$RUST_ANALYZER_REFERENCES_MANIFEST" "$workspace/Cargo.toml"
   export RUST_ANALYZER_REFERENCES_FAKE_RA="$RUST_ANALYZER_REFERENCES_FAKE_SOURCE"
   unset RUST_ANALYZER_REFERENCES_RETRY_METHOD
 }
@@ -63,6 +64,14 @@ assert data["kinds"] == [
 
   [ "$status" -eq 2 ]
   [[ "$output" == *"scan path does not exist: missing.rs"* ]]
+}
+
+@test "missing project configuration fails before analyzer startup" {
+  rm "$workspace/Cargo.toml"
+  run run_tool --kinds function --count 0
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"workspace does not contain Cargo.toml or rust-project.json"* ]]
 }
 
 @test "zero-reference exported functions and methods are reported" {

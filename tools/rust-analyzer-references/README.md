@@ -34,9 +34,10 @@ selection position. `--count` excludes the definition itself and counts only
 locations inside the workspace. Build, cache, VCS, and hidden directories are
 skipped.
 
-The workspace must be loadable by rust-analyzer through its normal project
-configuration, such as Cargo metadata or `rust-project.json`. The tool does
-not invoke Cargo or modify the project.
+The `--workspace` directory must contain `Cargo.toml` or `rust-project.json`
+so the tool can identify a Rust project before starting rust-analyzer. The
+workspace must then be loadable by rust-analyzer through that project
+configuration. The tool does not invoke Cargo or modify the project.
 
 Supported kinds are `enum`, `function`, `method`, `struct`, `trait`,
 `type-alias`, and `union`; use `--kinds all` to select all of them.

@@ -442,6 +442,15 @@ def wait_for_workspace(client: LspClient, path: Path, timeout: float) -> None:
         time.sleep(0.25)
 
 
+def validate_project_root(root: Path) -> None:
+    markers = (root / "Cargo.toml", root / "rust-project.json")
+    if not any(marker.is_file() for marker in markers):
+        raise ValueError(
+            "workspace does not contain Cargo.toml or rust-project.json: "
+            f"{root}; pass --workspace to a Rust project root"
+        )
+
+
 def collect_candidates(
     client: LspClient,
     root: Path,
@@ -836,6 +845,7 @@ def main() -> int:
         root = Path(args.workspace).resolve()
         if not root.is_dir():
             raise FileNotFoundError(f"workspace is not a directory: {args.workspace}")
+        validate_project_root(root)
         analyzer = shutil.which(args.rust_analyzer)
         if analyzer is None:
             raise FileNotFoundError(
