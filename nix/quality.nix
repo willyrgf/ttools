@@ -12,6 +12,7 @@ let
     pkgs.deadnix
     pkgs.findutils
     pkgs.nixfmt-rfc-style
+    pkgs.ruff
     pkgs.shellcheck
     pkgs.shfmt
     pkgs.statix
@@ -52,9 +53,11 @@ let
     runtimeInputs = [
       pkgs.findutils
       pkgs.nixfmt-rfc-style
+      pkgs.ruff
       pkgs.shfmt
     ];
     text = ''
+      ruff format --no-cache tools
       find tools -type f -name '*.sh' -print0 \
         | xargs -0 -r shfmt -w -i 2 -ci -sr
       find . -type f -name '*.nix' -not -path './.git/*' -print0 \
@@ -75,7 +78,7 @@ in
     format = {
       type = "app";
       program = lib.getExe format;
-      meta.description = "Format the repository's Bash and Nix source files.";
+      meta.description = "Format the repository's Bash, Python, and Nix source files.";
     };
   };
 
@@ -92,6 +95,11 @@ in
 
     repo-shfmt = mkRepoCheck "repo-shfmt" ''
       find tools -type f -name '*.sh' -print0 | xargs -0 -r shfmt -d -i 2 -ci -sr
+    '';
+
+    repo-python = mkRepoCheck "repo-python" ''
+      ruff check --no-cache tools
+      ruff format --check --no-cache tools
     '';
 
     repo-nixfmt = mkRepoCheck "repo-nixfmt" ''

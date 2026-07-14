@@ -36,6 +36,6 @@ nix run .#check
 nix run .#format
 ```
 
-`.#format` updates Bash and Nix source files in place. Checks use temporary
-fixtures. Do not run cleanup against a real store or rewrite this repository's
-history while developing.
+`.#format` updates Bash, Python, and Nix source files in place. Checks use
+temporary fixtures. Do not run cleanup against a real store or rewrite this
+repository's history while developing.

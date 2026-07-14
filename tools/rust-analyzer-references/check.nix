@@ -25,14 +25,7 @@ pkgs.runCommand "${toolName}-check"
     RUST_ANALYZER_REFERENCES_FAKE_SOURCE = fakeAnalyzer;
   }
   ''
-        cd "$src"
-        python3 -c '
-    import ast
-    from pathlib import Path
-
-    for filename in ("rust-analyzer-references.py", "tests/fake-rust-analyzer.py"):
-        ast.parse(Path(filename).read_text(encoding="utf-8"), filename)
-    '
-        bats --tap --print-output-on-failure tests/cli.bats
-        touch "$out"
+    cd "$src"
+    bats --tap --print-output-on-failure tests/cli.bats
+    touch "$out"
   ''

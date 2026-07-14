@@ -43,3 +43,12 @@ and update the relevant docs and tests in the same change.
 
 After every change, provide a clear, honest report of any part of the change
 that is not fully verified or that could still be considered fragile.
+
+## Automated checks
+
+`nix run .#check` runs the repository-wide quality checks. Ruff lints and
+formats Python sources, ShellCheck and shfmt cover Bash sources, and nixfmt,
+statix, and deadnix cover Nix expressions. Tool-local `check.nix` files own
+their functional tests.
+
+`nix run .#format` formats Bash, Python, and Nix sources in place.
