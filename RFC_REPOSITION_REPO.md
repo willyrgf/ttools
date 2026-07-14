@@ -76,23 +76,97 @@ Tool names use lowercase kebab-case. The names `help`, `list`, `version`, and
 Every tool should provide its own `--help` behavior. The root catalog should
 remain short; detailed behavior belongs to the selected tool.
 
+## CLI conventions and recommended practices
+
+The repository should normalize the user experience, not require every tool to
+use the same parser or command structure. These conventions are guidance for
+new tools and documentation, not behavior that the dispatcher or flake must
+enforce.
+
+### Required conventions
+
+Every tool should:
+
+- support `-h` and `--help`;
+- use lowercase kebab-case for commands and long options;
+- accept `--` to terminate options;
+- print normal results to standard output and diagnostics or progress to
+  standard error;
+- return zero for success, including a valid no-op;
+- return nonzero for argument-validation or operational failures; and
+- keep help and invalid-argument paths free of side effects.
+
+The dispatcher must preserve the selected tool's exit status.
+
+### Recommended conventions
+
+Use this general shape where it fits:
+
+```text
+tool [subcommand] [options] [operands]
+```
+
+Subcommands are appropriate when a tool has multiple distinct actions. They
+should not be introduced merely to make every tool look identical. For
+example, the initial tools can use:
+
+```text
+git-history review [options]
+git-history fix-messages [options]
+nix-cleanup [options] <target>
+```
+
+For options:
+
+- use `--option <value>` for values;
+- use boolean flags such as `--quick`, `--yes`, and `--truncate-long`;
+- use `--no-<feature>` for explicit negation;
+- reserve short aliases primarily for universal options such as `-h`; and
+- avoid vague names such as `--force` or `--quick` unless their meaning is
+  clearly defined for that tool.
+
+Prefer explicit modes and targets over surprising defaults. A tool may provide
+convenient defaults, but its help text should state them and show how to opt
+out.
+
+Mutation-capable tools should document:
+
+- whether the default behavior is read-only;
+- whether a dry-run or review mode exists;
+- what `--yes` changes, if supported;
+- what backup or recovery mechanism exists; and
+- which objects, files, commits, or paths may be changed.
+
+For this repository, `git-history` should make clear that `review` is
+read-only, while `fix-messages` and `add-prefix` rewrite history and create a
+backup branch. `nix-cleanup` should similarly document its confirmation,
+deletion, garbage-collection, and privilege behavior.
+
+### Tool-specific freedom
+
+Options should remain tool-specific when their semantics are domain-specific.
+For example, `git-history --base` and `--max-subject-length` need not be shared
+with `nix-cleanup`, just as `nix-cleanup --jobs`, `--older-than`, and `--no-gc`
+need not appear on other tools. The common convention is about semantics and
+documentation, not about making every tool expose the same flags.
+
 ## Repository layout
 
 ```text
 flake.nix
 flake.lock
 README.md
-bin/
-  tools                         Generated-dispatcher source or template.
 tools/
   nix-cleanup/
     nix-cleanup.sh              Tool source.
     package.nix                  Tool derivation.
+    check.nix                   Tool quality check derivation.
     tests/
       cli.bats                   Tool-specific tests.
   git-history/
     git-history.sh               Tool source.
     package.nix                  Tool derivation.
+    check.nix                   Tool quality check derivation.
     tests/
       cli.bats                   Help and argument-validation tests.
       rewrite.bats               Fixture-based history rewrite tests.
@@ -103,9 +177,9 @@ tools/
 ```
 
 Each immediate child directory of `tools/` is one tool. A directory is valid
-only when it contains `package.nix`. Shared repository code, if it becomes
-necessary, belongs outside `tools/<name>` and should be introduced only after
-repetition is demonstrated.
+only when it contains both `package.nix` and `check.nix`. Shared repository
+code, if it becomes necessary, belongs outside `tools/<name>` and should be
+introduced only after repetition is demonstrated.
 
 ## Tool package contract
 
@@ -113,7 +187,7 @@ Each `tools/<name>/package.nix` receives the package set, library, and
 filesystem-derived tool name, then returns one executable derivation:
 
 ```nix
-{ pkgs, lib, toolName }:
+{ pkgs, lib, toolName, flakeCommit ? "unknown" }:
 
 pkgs.someBuilder {
   pname = toolName;
@@ -135,6 +209,13 @@ The contract is intentionally narrow:
   language runtimes or tools.
 - One directory represents one public command. Tools that expose several
   unrelated commands should be split into separate directories.
+- `check.nix` returns the deterministic quality check for the tool and owns its
+  test-specific dependencies.
+
+Privileged system capabilities such as `sudo` may remain host-provided when
+they depend on the host's user and security configuration. This is an explicit
+exception to the ordinary runtime dependency rule and must be documented by
+the affected tool.
 
 The existing `nix-cleanup` runtime wrapper, pinned `PATH`, and flake-commit
 display remain specific to `tools/nix-cleanup/package.nix`. They should not
@@ -149,8 +230,8 @@ from its Nix package rather than the ambient `PATH`.
 ## Flake discovery and generated dispatcher
 
 The flake should use `builtins.readDir` to enumerate the immediate children of
-`./tools`, retain directories, validate that each contains `package.nix`, and
-sort the names for deterministic output.
+`./tools`, retain directories, validate that each contains `package.nix` and
+`check.nix`, and sort the names for deterministic output.
 
 Conceptually:
 
@@ -159,7 +240,13 @@ toolNames = sortedImmediateDirectories ./tools;
 
 toolPackages = lib.genAttrs toolNames (toolName:
   import (./tools + "/${toolName}/package.nix") {
+    inherit pkgs lib toolName flakeCommit;
+  });
+
+toolChecks = lib.genAttrs toolNames (toolName:
+  import (./tools + "/${toolName}/check.nix") {
     inherit pkgs lib toolName;
+    package = toolPackages.${toolName};
   });
 ```
 
@@ -173,7 +260,8 @@ toolInfo = lib.mapAttrs (toolName: package: {
 }) toolPackages;
 ```
 
-The default `tools` executable is generated from `toolInfo`. It contains:
+The default `tools` executable is generated directly in the flake from
+`toolInfo`. It contains:
 
 - a sorted catalog of names and descriptions;
 - a dispatch case for each tool name;
@@ -196,8 +284,8 @@ apps.default = {
 };
 ```
 
-There is no handwritten list of tools in the dispatcher and no separate
-registry to keep synchronized with the filesystem.
+There is no handwritten list of tools in the dispatcher, no tracked dispatcher
+template, and no separate registry to keep synchronized with the filesystem.
 
 ## Closure-size tradeoff
 
@@ -221,9 +309,10 @@ revision ambiguity, and dependence on a second Nix evaluation.
 
 ## Testing and quality checks
 
-The existing `nix-cleanup` tests move with the tool. The root flake should
-provide a deterministic check for each discovered tool, with tool-specific
-checks kept near that tool where practical.
+The existing `nix-cleanup` tests move with the tool. Every discovered tool
+provides a deterministic `check.nix` next to its package, with tool-specific
+tests kept near that tool. The root flake composes those checks with the
+repository-wide quality checks.
 
 At minimum, repository validation should cover:
 
@@ -284,17 +373,12 @@ Because the latter two commands change commit IDs, documentation should
 recommend an explicit `--base` and make the generated backup branch visible in
 the command's safety guidance.
 
-If existing cron jobs or scripts depend on
-`github:willyrgf/nix-cleanup` being a direct cleanup app, keep a temporary
-compatibility wrapper or repository until those callers are migrated. A GitHub
-repository rename may redirect the old URL, but it cannot preserve the old
-default-app behavior after this repository becomes a dispatcher.
+Existing callers of `github:willyrgf/nix-cleanup` must be migrated to the new
+dispatcher or direct package path. The old default-app behavior is intentionally
+not preserved, and the repository must not add a compatibility wrapper or
+legacy mode.
 
 ## Open decisions
 
-- Whether to provide a temporary legacy mode for old `nix-cleanup` flags.
-- Whether per-tool checks should be discovered through an optional conventional
-  file such as `check.nix`, or remain explicit in the flake while the test
-  layout settles.
 - The closure-size threshold at which individual `#tool` execution becomes the
   preferred documented path.
