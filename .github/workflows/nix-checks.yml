@@ -29,8 +29,8 @@ jobs:
           extra_nix_config: |
             sandbox = true # force sandbox for all OS (normally disabled for macOS)
 
-      - name: Run flake checks
-        run: nix flake check --print-build-logs --show-trace
+      - name: Run repository checks
+        run: nix run .#check
 
       - name: Smoke-test ttools dispatcher and tiny-tool help
         run: |

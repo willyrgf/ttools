@@ -122,60 +122,25 @@
           esac
         '';
         dispatcherProgram = "${ttoolsEntrypoint}/bin/ttools";
-        qualityPackages = [
-          pkgs.actionlint
-          pkgs.bash
-          pkgs.bats
-          pkgs.coreutils
-          pkgs.deadnix
-          pkgs.findutils
-          pkgs.shellcheck
-          pkgs.shfmt
-          pkgs.statix
-        ];
-
-        mkRepoCheck = name: command:
-          pkgs.runCommand name {
-            src = ./.;
-            nativeBuildInputs = qualityPackages;
-          } ''
-            cd "$src"
-            ${command}
-            touch "$out"
-          '';
+        quality = import ./nix/quality.nix {
+          inherit pkgs lib;
+          src = ./.;
+        };
       in
       {
         packages = toolPackages // {
           default = ttoolsEntrypoint;
         };
 
-        apps.default = {
-          type = "app";
-          program = dispatcherProgram;
-          meta.description = "Generated ttools dispatcher for the repository's tiny tools.";
+        apps = quality.apps // {
+          default = {
+            type = "app";
+            program = dispatcherProgram;
+            meta.description = "Generated ttools dispatcher for the repository's tiny tools.";
+          };
         };
 
-        checks = toolChecks // {
-          repo-bash-syntax = mkRepoCheck "repo-bash-syntax" ''
-            while IFS= read -r -d $'\0' source; do
-              bash -n "$source"
-            done < <(find tools -type f -name '*.sh' -print0)
-          '';
-          repo-shellcheck = mkRepoCheck "repo-shellcheck" ''
-            find tools -type f -name '*.sh' -print0 | xargs -0 -r shellcheck -x
-          '';
-          repo-shfmt = mkRepoCheck "repo-shfmt" ''
-            find tools -type f -name '*.sh' -print0 | xargs -0 -r shfmt -d -i 2 -ci -sr
-          '';
-          repo-actionlint = mkRepoCheck "repo-actionlint" ''
-            actionlint .github/workflows/nix-checks.yml
-          '';
-          repo-statix = mkRepoCheck "repo-statix" ''
-            statix check .
-          '';
-          repo-deadnix = mkRepoCheck "repo-deadnix" ''
-            deadnix .
-          '';
+        checks = toolChecks // quality.checks // {
           repo-ttools-smoke = pkgs.runCommand "repo-ttools-smoke" {
             src = ./.;
             nativeBuildInputs = [ pkgs.coreutils ];
@@ -214,10 +179,10 @@
 
         devShells = {
           quality = pkgs.mkShell {
-            packages = qualityPackages;
+            packages = quality.devPackages;
           };
           default = pkgs.mkShell {
-            packages = qualityPackages;
+            packages = quality.devPackages;
           };
         };
       });

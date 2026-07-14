@@ -30,8 +30,10 @@ documentation. See [AGENTS.md](AGENTS.md) for contribution guidance.
 ```bash
 nix run . -- --help
 nix run . -- list
-nix flake check --print-build-logs --show-trace
+nix run .#check
+nix run .#format
 ```
 
-Checks use temporary fixtures. Do not run cleanup against a real store or
-rewrite this repository's history while developing.
+`.#format` updates Bash and Nix source files in place. Checks use temporary
+fixtures. Do not run cleanup against a real store or rewrite this repository's
+history while developing.
