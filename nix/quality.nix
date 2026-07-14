@@ -1,5 +1,9 @@
 # Repository-wide quality checks and developer commands.
-{ pkgs, lib, src, }:
+{
+  pkgs,
+  lib,
+  src,
+}:
 let
   qualityPackages = [
     pkgs.actionlint
@@ -7,27 +11,37 @@ let
     pkgs.coreutils
     pkgs.deadnix
     pkgs.findutils
-    pkgs.nixfmt
+    pkgs.nixfmt-rfc-style
     pkgs.shellcheck
     pkgs.shfmt
     pkgs.statix
   ];
 
-  devPackages = qualityPackages ++ [ pkgs.bats pkgs.gitMinimal pkgs.nix ];
+  devPackages = qualityPackages ++ [
+    pkgs.bats
+    pkgs.gitMinimal
+    pkgs.nix
+  ];
 
-  mkRepoCheck = name: command:
-    pkgs.runCommand name {
-      inherit src;
-      nativeBuildInputs = qualityPackages;
-    } ''
-      cd "$src"
-      ${command}
-      touch "$out"
-    '';
+  mkRepoCheck =
+    name: command:
+    pkgs.runCommand name
+      {
+        inherit src;
+        nativeBuildInputs = qualityPackages;
+      }
+      ''
+        cd "$src"
+        ${command}
+        touch "$out"
+      '';
 
   check = pkgs.writeShellApplication {
     name = "ttools-check";
-    runtimeInputs = [ pkgs.gitMinimal pkgs.nix ];
+    runtimeInputs = [
+      pkgs.gitMinimal
+      pkgs.nix
+    ];
     text = ''
       exec nix flake check --print-build-logs --show-trace
     '';
@@ -35,7 +49,11 @@ let
 
   format = pkgs.writeShellApplication {
     name = "ttools-format";
-    runtimeInputs = [ pkgs.findutils pkgs.nixfmt pkgs.shfmt ];
+    runtimeInputs = [
+      pkgs.findutils
+      pkgs.nixfmt-rfc-style
+      pkgs.shfmt
+    ];
     text = ''
       find tools -type f -name '*.sh' -print0 \
         | xargs -0 -r shfmt -w -i 2 -ci -sr
@@ -43,15 +61,15 @@ let
         | xargs -0 -r nixfmt
     '';
   };
-in {
+in
+{
   inherit devPackages;
 
   apps = {
     check = {
       type = "app";
       program = lib.getExe check;
-      meta.description =
-        "Run the repository's complete Nix and source-quality checks.";
+      meta.description = "Run the repository's complete Nix and source-quality checks.";
     };
 
     format = {
