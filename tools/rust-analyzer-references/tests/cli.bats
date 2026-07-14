@@ -1,0 +1,93 @@
+#!/usr/bin/env bats
+
+setup() {
+  workspace="$BATS_TEST_TMPDIR/workspace"
+  mkdir -p "$workspace"
+  cp "$RUST_ANALYZER_REFERENCES_FIXTURE" "$workspace/sample.rs"
+  export RUST_ANALYZER_REFERENCES_FAKE_RA="$RUST_ANALYZER_REFERENCES_FAKE_SOURCE"
+}
+
+run_tool() {
+  "$RUST_ANALYZER_REFERENCES_BIN" \
+    --workspace "$workspace" \
+    --rust-analyzer "$RUST_ANALYZER_REFERENCES_FAKE_RA" \
+    "$@"
+}
+
+@test "help does not start rust-analyzer" {
+  run "$RUST_ANALYZER_REFERENCES_BIN" --help
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--kinds KINDS"* ]]
+  [[ "$output" == *"--count COUNT"* ]]
+}
+
+@test "invalid kinds fail before analyzer startup" {
+  run run_tool --kinds nope --count 0
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"unknown kind(s): nope"* ]]
+}
+
+@test "zero-reference exported functions and methods are reported" {
+  run run_tool \
+    --kinds function,method \
+    --visibility exported \
+    --count 0 \
+    --output json
+
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+names = {item["name"] for item in data["matches"]}
+assert names == {"unused_public", "method"}, names
+assert all(item["reference_count"] == 0 for item in data["matches"])
+'
+}
+
+@test "exactly one reference selects only the single-use type" {
+  run run_tool \
+    --kinds enum,struct,trait,type-alias,union \
+    --visibility any \
+    --count 1 \
+    --output json
+
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+names = {item["name"] for item in data["matches"]}
+assert names == {"OneUse"}, names
+assert data["matches"][0]["references"][0]["column"] > 1
+'
+}
+
+@test "fail-on-findings returns one" {
+  run run_tool --kinds function --visibility exported --count 0 --fail-on-findings
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"unused_public"* ]]
+}
+
+@test "no findings succeeds" {
+  run run_tool --kinds function --visibility exported --count 99 --fail-on-findings
+
+  [ "$status" -eq 0 ]
+}
+
+@test "paths after the option terminator are accepted" {
+  run run_tool \
+    --kinds function \
+    --visibility exported \
+    --count 0 \
+    -- \
+    "$workspace/sample.rs"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"unused_public"* ]]
+}

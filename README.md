@@ -21,6 +21,8 @@ also available as `.#nix-cleanup` and `.#git-history`.
   paths and optionally run garbage collection.
 - [git-history](tools/git-history/README.md) — review or deliberately rewrite
   selected Git commit messages.
+- [rust-analyzer-references](tools/rust-analyzer-references/README.md) — report
+  Rust definitions by rust-analyzer reference count.
 
 Each tool folder contains its implementation, package, tests, and usage
 documentation. See [AGENTS.md](AGENTS.md) for contribution guidance.
