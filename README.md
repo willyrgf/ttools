@@ -13,7 +13,7 @@ nix run 'github:willyrgf/ttools' -- <tool> [args...]
 
 The dispatcher consumes the tool name and passes all remaining arguments,
 input, output, signals, and exit status through unchanged. Direct packages are
-also available as `.#nix-cleanup` and `.#git-history`.
+also available for each tool, such as `.#dump2llm`.
 
 ## Tiny tools
 
@@ -21,6 +21,8 @@ also available as `.#nix-cleanup` and `.#git-history`.
   paths and optionally run garbage collection.
 - [git-history](tools/git-history/README.md) — review or deliberately rewrite
   selected Git commit messages.
+- [dump2llm](tools/dump2llm/README.md) — dump text from Git repositories and
+  paths for LLM chats.
 - [rust-analyzer-references](tools/rust-analyzer-references/README.md) — report
   Rust definitions by rust-analyzer reference count.
 

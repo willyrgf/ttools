@@ -183,7 +183,7 @@
 
                   help_output="$(${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" --help)"
                   case "$help_output" in
-                    *"ttools - a collection of tiny command-line tools."*"Available tools:"*"git-history"*"nix-cleanup"*) ;;
+                    *"ttools - a collection of tiny command-line tools."*"Available tools:"*"dump2llm"*"git-history"*"nix-cleanup"*) ;;
                     *)
                       printf '%s\n' "dispatcher help output is incomplete" >&2
                       exit 1
@@ -194,13 +194,17 @@
                   first_tool="$(printf '%s\n' "$list_output" | sed -n '2p')"
                   second_tool="$(printf '%s\n' "$list_output" | sed -n '3p')"
                   third_tool="$(printf '%s\n' "$list_output" | sed -n '4p')"
-                  [ "$first_tool" = "  git-history - Review and deliberately rewrite selected Git history." ]
-                  [ "$second_tool" = "  nix-cleanup - Safely remove dead Nix store paths and optionally run garbage collection." ]
-                  [ "$third_tool" = "  rust-analyzer-references - Report Rust definitions by rust-analyzer reference count." ]
+                  fourth_tool="$(printf '%s\n' "$list_output" | sed -n '5p')"
+                  [ "$first_tool" = "  dump2llm - Dump Git repositories and paths as text for LLM chats." ]
+                  [ "$second_tool" = "  git-history - Review and deliberately rewrite selected Git history." ]
+                  [ "$third_tool" = "  nix-cleanup - Safely remove dead Nix store paths and optionally run garbage collection." ]
+                  [ "$fourth_tool" = "  rust-analyzer-references - Report Rust definitions by rust-analyzer reference count." ]
 
+                  ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" dump2llm --help > "$TMPDIR/dump2llm-help"
                   ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" git-history --help > "$TMPDIR/git-history-help"
                   ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" nix-cleanup --help > "$TMPDIR/nix-cleanup-help"
                   ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" rust-analyzer-references --help > "$TMPDIR/rust-analyzer-references-help"
+                  grep -F 'Usage:' "$TMPDIR/dump2llm-help" > /dev/null
                   grep -F 'Usage:' "$TMPDIR/git-history-help" > /dev/null
                   grep -F 'Usage:' "$TMPDIR/nix-cleanup-help" > /dev/null
                   grep -F -- '--kinds KINDS' "$TMPDIR/rust-analyzer-references-help" > /dev/null
