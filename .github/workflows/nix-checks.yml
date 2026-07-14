@@ -32,6 +32,14 @@ jobs:
       - name: Run flake checks
         run: nix flake check --print-build-logs --show-trace
 
+      - name: Smoke-test dispatcher and tool help
+        run: |
+          set -euo pipefail
+          nix run . -- --help
+          nix run . -- list
+          nix run . -- git-history --help
+          nix run . -- nix-cleanup --help
+
   disposable_store_path:
     name: Disposable store path cleanup (ubuntu-latest)
     runs-on: ubuntu-latest

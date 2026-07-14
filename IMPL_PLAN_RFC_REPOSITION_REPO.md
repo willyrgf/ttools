@@ -1,7 +1,7 @@
 # Implementation plan: reposition the repository as `tools`
 
 - Source of truth: [RFC_REPOSITION_REPO.md](RFC_REPOSITION_REPO.md)
-- Status: ready for implementation after the quality-document preflight
+- Status: implementation complete; final verification recorded
 - Scope: migrate this repository to the RFC's final two-tool architecture
 
 This document is an execution plan for the engineer-agent. Work through the

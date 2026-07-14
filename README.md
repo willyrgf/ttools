@@ -1,169 +1,140 @@
-# nix-cleanup
+# tools
 
-`nix-cleanup` is a Bash CLI that removes dead Nix store paths with safe filtering and parallel deletion.
+`tools` is a small collection of useful command-line tools published from
+`github:willyrgf/tools`. The default Nix app is a generated dispatcher for the
+initial `nix-cleanup` and `git-history` tools.
 
-## Run
+## Dispatcher
+
+Run the catalog, list tools, or dispatch one tool:
 
 ```bash
-nix run 'github:willyrgf/nix-cleanup' -- --help
+nix run 'github:willyrgf/tools'
+nix run 'github:willyrgf/tools' -- list
+nix run 'github:willyrgf/tools' -- nix-cleanup --help
+nix run 'github:willyrgf/tools' -- git-history --help
 ```
 
-The packaged app is wrapped with a pinned runtime `PATH` so `nix run` does not
-depend on ambient host tooling for core commands.
+The dispatcher consumes only the tool name. Every remaining argument, standard
+input, output stream, signal, and exit status is passed directly to that tool.
+Tool names are lowercase kebab-case. `help`, `list`, `version`, and `default`
+are reserved by the dispatcher.
 
-## Runtime Dependencies
-
-Runtime tools are bundled in the app closure and checked at startup:
-- `nix`, `nix-store`, `nix-collect-garbage`
-- `find`, `xargs`, `mktemp`, `awk`, `grep`
-- `cp`, `mv`, `rm`, `cat`, `sleep`, `date`
-- `git`, `crontab` (required globally by policy)
-
-Feature-specific host dependency:
-- `sudo` is validated when a privileged operation is executed.
-
-## Deterministic Quality Gates
-
-All quality checks are Nix-packaged and pinned by `flake.lock`. CI and local
-development should use the same canonical command:
+Direct package outputs are available when the dispatcher closure is not wanted:
 
 ```bash
+nix run 'github:willyrgf/tools#nix-cleanup' -- --quick
+nix run 'github:willyrgf/tools#git-history' -- review --base origin/main
+nix build 'github:willyrgf/tools#default'
+```
+
+## `nix-cleanup`
+
+`nix-cleanup` safely removes dead Nix store paths. It classifies candidates
+against a dead-path snapshot, skips paths that are still alive, asks for
+confirmation before deletion, and can run final garbage collection explicitly.
+
+```text
+nix-cleanup [--yes] [--jobs N] [--quick] [--no-gc|--gc] --system
+nix-cleanup [--yes] [--jobs N] [--quick] [--no-gc|--gc] --older-than 30d
+nix-cleanup [--yes] [--jobs N] [--quick] [--no-gc|--gc] <flake-package>
+nix-cleanup [--yes] [--jobs N] [--quick] [--no-gc|--gc] /nix/store/path ...
+nix-cleanup [--yes] [--jobs N] --gc-only
+nix-cleanup --add-cron [<command-or-cron-entry>]
+```
+
+Important options:
+
+- `--quick` performs one deletion pass, defaults to `--system` when no target
+  is selected, and defaults to `--no-gc` unless `--gc` is explicit.
+- `--yes` skips the deletion confirmation prompt.
+- `--older-than <duration>` accepts values such as `30d` and filters dead
+  paths by age.
+- `--jobs <N>` controls parallel filtering and deletion workers.
+- `--gc-only`, `--gc`, and `--no-gc` control garbage collection.
+- `--add-cron` installs a root crontab entry. With no value it uses the
+  documented daily cleanup command; plain commands are normalized to `@daily`.
+
+Deletion and garbage collection require `sudo` and the host user's privilege
+configuration. `--add-cron` also modifies root's crontab and requires `sudo`.
+Help and validation paths do not delete store paths or change crontabs.
+Runtime commands are supplied by the package wrapper; `sudo` remains an
+explicit host capability because its behavior cannot be safely bundled.
+
+Examples:
+
+```bash
+nix run . -- nix-cleanup --quick --yes
+nix run . -- nix-cleanup --older-than 30d --quick
+nix run . -- nix-cleanup --system --jobs 16 --yes
+nix run . -- nix-cleanup --quick --gc --yes
+nix run . -- nix-cleanup --gc-only
+nix run . -- nix-cleanup --add-cron
+```
+
+Use `--` to terminate option parsing when a positional operand must begin with
+a hyphen. Long options use the canonical `--option <value>` form; duplicate
+`--option=value` forms and the old `help` and `-y` aliases are not supported.
+
+## `git-history`
+
+`git-history` reviews commits on the current branch and, only when explicitly
+requested, rewrites selected commit messages. The selected range is
+`merge-base(<base>, HEAD)..HEAD`; pass an explicit `--base` for reproducible
+work.
+
+```bash
+nix run . -- git-history review --base origin/main
+nix run . -- git-history fix-messages --base origin/main --max-subject-length 72
+nix run . -- git-history add-prefix 'cleanup: ' --base origin/main
+```
+
+Commands:
+
+- `review` is read-only. It reports empty, multi-line, trailer/author, and
+  overlong message violations.
+- `fix-messages` normalizes selected subjects and can use
+  `--truncate-long` with `--max-subject-length <N>`.
+- `add-prefix <prefix>` adds a literal subject prefix and is idempotent.
+
+The two rewriting commands require a checked-out branch with no staged or
+unstaged tracked changes. Before moving the branch, they create a backup branch
+named like `backup/git-history-<branch>-<timestamp>`. They preserve each final
+tree, parent topology, author and committer identities, and author and
+committer dates. Commit IDs change when messages or rewritten parents change.
+Signed commits and commits with unsupported extra headers are refused.
+
+Every tool supports `-h`, `--help`, `--` as the end-of-options marker, lowercase
+kebab-case long options, side-effect-free help/validation paths, and nonzero
+status for validation or operational failures. Normal results go to stdout;
+diagnostics and progress go to stderr.
+
+## Development and validation
+
+The flake discovers each immediate `tools/<name>` directory. A tool directory
+must contain its source, `package.nix`, `check.nix`, and local tests. Adding a
+tool does not require editing a root command registry.
+
+Useful local commands:
+
+```bash
+bash -n tools/nix-cleanup/nix-cleanup.sh
+bash -n tools/git-history/git-history.sh
+nix build .#nix-cleanup
+nix build .#git-history
+nix build .#default
+nix run . -- --help
+nix run . -- list
+nix run . -- git-history --help
+nix run . -- nix-cleanup --help
 nix flake check --print-build-logs --show-trace
-```
-
-`nix flake check` runs:
-- Bash syntax check (`bash -n`)
-- Shell lint (`shellcheck`)
-- Formatting check (`shfmt -d`)
-- GitHub Actions lint (`actionlint`)
-- Nix lint (`statix`, `deadnix`)
-- CLI behavior tests (`bats tests/cli.bats`)
-
-For interactive local iteration, use the pinned toolchain shell:
-
-```bash
 nix develop
 ```
 
-Additional deterministic shells:
+The root checks run every discovered tool check plus Bash syntax, shellcheck,
+shfmt, actionlint, statix, deadnix, and dispatcher smoke tests. Tool checks use
+temporary fixtures; do not run cleanup against a real store or rewrite this
+repository's history while developing.
 
-```bash
-# Runtime-only commands
-nix develop .#runtime
-
-# Runtime + quality tooling
-nix develop .#quality
-```
-
-## Usage
-
-```text
-nix-cleanup - clean dead nix store paths safely
-Flake commit: <commit-hash-or-unknown>
-
-Usage:
-  nix-cleanup [--yes] [--jobs N] [--quick] [--no-gc|--gc] --system
-  nix-cleanup [--yes] [--jobs N] [--quick] [--no-gc|--gc] --older-than 30d
-  nix-cleanup [--yes] [--jobs N] [--quick] [--no-gc|--gc] flake-pkg-name
-  nix-cleanup [--yes] [--jobs N] [--quick] [--no-gc|--gc] /nix/store/path ...
-  nix-cleanup [--yes] [--jobs N] --gc-only
-  nix-cleanup --add-cron [COMMAND_OR_CRON_ENTRY]
-  nix-cleanup help | -h | --help
-
-Options:
-  -y, --yes
-      Skip deletion confirmation prompts.
-  --system
-      Clean all currently dead nix-store paths discovered from /nix/store.
-  --older-than <duration>
-      Clean dead store paths older than the provided duration.
-      Format: <number>d (example: 30d).
-  --quick
-      One-pass fast cleanup. Deletes dead paths once and skips retry waves.
-      Defaults to --system and --no-gc unless target/gc mode is specified.
-  --jobs <N>
-      Parallel worker count for path filtering and deletion.
-      Default: auto (between 4 and 32 based on CPU count).
-  --no-gc
-      Skip final 'nix-collect-garbage -d'.
-  --gc
-      Force final 'nix-collect-garbage -d' (overrides --quick default).
-  --gc-only
-      Run only 'nix-collect-garbage -d'.
-  --add-cron <command-or-cron-entry>
-      Add an entry to root's crontab (sudo required).
-      Full cron entries are installed as-is.
-      Plain commands are stored as: @daily <command>.
-      Default command when omitted: nix-cleanup --quick --gc --yes --jobs 4
-  -h, --help
-      Show this help text.
-```
-
-## Performance Notes
-
-- `--older-than` now works in a dead-first pipeline:
-  - snapshot dead store paths once
-  - age-filter only those dead paths in parallel
-  - delete in parallel workers
-- `--quick` is a fast and safe one-pass delete mode.
-- `--quick` with no target defaults to `--system`.
-- `--quick` defaults to `--no-gc`; use `--gc` to force final GC.
-- `--jobs N` lets you scale parallelism up or down.
-- `help` as the first argument behaves like `--help`.
-
-## Examples
-
-```bash
-# Fast dead-path cleanup older than 30 days
-nix run .#nix-cleanup -- --older-than 30d --quick
-
-# Default quick mode (equivalent target/gc defaults: --system --no-gc)
-nix run .#nix-cleanup -- --quick --yes
-
-# More aggressive parallel cleanup of dead paths
-nix run .#nix-cleanup -- --system --jobs 16 --yes
-
-# Quick mode with explicit final GC
-nix run .#nix-cleanup -- --quick --gc --yes
-
-# Clean package closure candidates without final GC
-nix run .#nix-cleanup -- hello --no-gc
-
-# Explicit store paths
-nix run .#nix-cleanup -- /nix/store/hash-a /nix/store/hash-b --quick
-
-# Run only garbage collection
-nix run .#nix-cleanup -- --gc-only
-```
-
-## Cron setup (requires sudo)
-
-Use `--add-cron` to append to root's crontab:
-
-- default command (stored as `@daily`):
-
-```bash
-nix run .#nix-cleanup -- --add-cron
-```
-
-- command only (stored as `@daily`):
-
-```bash
-nix run .#nix-cleanup -- --add-cron "nix-cleanup --quick --gc --yes --jobs 4"
-```
-
-- full cron entry:
-
-```bash
-nix run .#nix-cleanup -- --add-cron "0 3 * * * nix-cleanup --quick --gc --yes --jobs 4"
-```
-
-## Lockfile Policy
-
-- `flake.lock` is the source of truth for tool and dependency versions.
-- Update lock inputs only through explicit maintenance changes.
-- After any lock update, run:
-
-```bash
-nix flake check --print-build-logs --show-trace
-```
+The pinned `flake.lock` is the dependency source of truth. Update it only as an
+intentional dependency maintenance change, then rerun the complete flake check.
