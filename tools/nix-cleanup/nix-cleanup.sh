@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 _exit_error() {
-  echo "ERROR: $*"
+  printf 'ERROR: %s\n' "$*" >&2
   exit 1
 }
 
@@ -48,10 +48,10 @@ Usage:
   $(_arg0) [--yes] [--jobs N] [--quick] [--no-gc|--gc] /nix/store/path ...
   $(_arg0) [--yes] [--jobs N] --gc-only
   $(_arg0) --add-cron [COMMAND_OR_CRON_ENTRY]
-  $(_arg0) help | -h | --help
+  $(_arg0) -h | --help
 
 Options:
-  -y, --yes
+  --yes
       Skip deletion confirmation prompts.
   --system
       Clean all currently dead nix-store paths discovered from /nix/store.
@@ -144,10 +144,10 @@ _print_preview() {
     return
   fi
 
-  echo "$label (${count}):"
-  _print_first_lines "$file" 20
+  echo "$label (${count}):" >&2
+  _print_first_lines "$file" 20 >&2
   if [ "$count" -gt 20 ]; then
-    echo "... and $((count - 20)) more"
+    echo "... and $((count - 20)) more" >&2
   fi
 }
 
@@ -161,7 +161,7 @@ _confirm_deletion() {
 
   read -r -p "Delete ${count} dead path(s)? (y/N): " reply
   if [[ ! "$reply" =~ ^[Yy]$ ]]; then
-    echo "Aborting."
+    echo "Aborting." >&2
     exit 1
   fi
 }
@@ -341,8 +341,8 @@ _delete_quick() {
   fi
 
   if [ -s "$log_file" ] && [ "$DELETE_RESULT_UNRESOLVED" -gt 0 ]; then
-    echo "Delete output (first 20 lines):"
-    _print_first_lines "$log_file" 20
+    echo "Delete output (first 20 lines):" >&2
+    _print_first_lines "$log_file" 20 >&2
   fi
 
   rm -f "$remaining_file" "$log_file"
@@ -385,11 +385,11 @@ _delete_iterative() {
     fi
 
     if [ "$wave" -gt "$MAX_DELETE_WAVES" ]; then
-      echo "Reached max delete waves (${MAX_DELETE_WAVES}); stopping retries."
+      echo "Reached max delete waves (${MAX_DELETE_WAVES}); stopping retries." >&2
       break
     fi
 
-    echo "Deletion wave ${wave}: ${pending_count} path(s), jobs=${JOBS}, chunk=${chunk}."
+    echo "Deletion wave ${wave}: ${pending_count} path(s), jobs=${JOBS}, chunk=${chunk}." >&2
 
     log_file=$(mktemp)
     _delete_batch "$pending_file" "$chunk" "$log_file"
@@ -428,7 +428,7 @@ _delete_iterative() {
     if [ "$deleted_this" -eq 0 ]; then
       if [ "$chunk" -gt 1 ]; then
         chunk=1
-        echo "No progress in wave ${wave}; retrying unresolved paths one-by-one."
+        echo "No progress in wave ${wave}; retrying unresolved paths one-by-one." >&2
       else
         no_progress=$((no_progress + 1))
       fi
@@ -440,7 +440,7 @@ _delete_iterative() {
     pending_file="$retry_dead"
 
     if [ "$no_progress" -ge 1 ]; then
-      echo "No progress after one-by-one retries; stopping."
+      echo "No progress after one-by-one retries; stopping." >&2
       break
     fi
 
@@ -464,8 +464,10 @@ _run_gc() {
 _candidates_system() {
   local output_file=$1
 
-  echo "Discovering candidates from /nix/store..."
-  find /nix/store -mindepth 1 -maxdepth 1 -print > "$output_file"
+  echo "Discovering candidates from /nix/store..." >&2
+  if ! find /nix/store -mindepth 1 -maxdepth 1 -print > "$output_file"; then
+    _exit_error "failed to discover nix-store paths"
+  fi
   _dedupe_file_inplace "$output_file"
 }
 
@@ -484,7 +486,7 @@ _candidates_older_than() {
 
   : > "$output_file"
   if [ -s "$dead_file" ]; then
-    echo "Discovering dead candidates older than ${older_than}..."
+    echo "Discovering dead candidates older than ${older_than}..." >&2
     xargs -r -n 64 -P "$JOBS" find -maxdepth 0 -mtime +"$days" -print < "$dead_file" > "$output_file" 2> /dev/null || true
     _dedupe_file_inplace "$output_file"
   fi
@@ -545,17 +547,22 @@ _run_cleanup_pipeline() {
   local alive_file
   local alive_count
   local deletable_count
+  local gc_failed
 
   total_start=$(_now_epoch)
   gc_seconds=0
+  gc_failed=0
 
   candidate_count=$(_count_lines "$candidates_file")
-  echo "Found ${candidate_count} candidate path(s)."
+  echo "Found ${candidate_count} candidate path(s)." >&2
 
   if [ "$candidate_count" -eq 0 ]; then
     if [ "$RUN_GC" -eq 1 ]; then
       gc_start=$(_now_epoch)
-      _run_gc
+      if ! _run_gc; then
+        echo "Garbage collection failed." >&2
+        return 1
+      fi
       gc_end=$(_now_epoch)
       gc_seconds=$((gc_end - gc_start))
     fi
@@ -591,7 +598,11 @@ _run_cleanup_pipeline() {
 
     if [ "$RUN_GC" -eq 1 ]; then
       gc_start=$(_now_epoch)
-      _run_gc
+      if ! _run_gc; then
+        echo "Garbage collection failed." >&2
+        rm -f "$dead_snapshot" "$deletable_file" "$alive_file"
+        return 1
+      fi
       gc_end=$(_now_epoch)
       gc_seconds=$((gc_end - gc_start))
     fi
@@ -609,7 +620,7 @@ _run_cleanup_pipeline() {
   _print_preview "Dead paths targeted for deletion" "$deletable_file"
 
   if [ "$QUICK_MODE" -eq 1 ]; then
-    echo "Quick mode enabled: one-pass deletion, no retry waves."
+    echo "Quick mode enabled: one-pass deletion, no retry waves." >&2
   fi
 
   _confirm_deletion "$deletable_count"
@@ -632,7 +643,10 @@ _run_cleanup_pipeline() {
 
   if [ "$RUN_GC" -eq 1 ]; then
     gc_start=$(_now_epoch)
-    _run_gc
+    if ! _run_gc; then
+      echo "Garbage collection failed." >&2
+      gc_failed=1
+    fi
     gc_end=$(_now_epoch)
     gc_seconds=$((gc_end - gc_start))
   fi
@@ -648,6 +662,12 @@ _run_cleanup_pipeline() {
   if [ -n "$DELETE_RESULT_UNRESOLVED_FILE" ] && [ -f "$DELETE_RESULT_UNRESOLVED_FILE" ]; then
     rm -f "$DELETE_RESULT_UNRESOLVED_FILE"
   fi
+
+  if [ "$DELETE_RESULT_UNRESOLVED" -gt 0 ] || [ "$gc_failed" -eq 1 ]; then
+    return 1
+  fi
+
+  return 0
 }
 
 _all_are_store_paths() {
@@ -812,18 +832,13 @@ MAX_DELETE_WAVES=5
 QUICK_DEFAULTED_SYSTEM=0
 QUICK_DEFAULTED_NO_GC=0
 
-if [ "${1:-}" = "help" ]; then
-  _help
-  exit 0
-fi
-
 while [ $# -gt 0 ]; do
   case "$1" in
     -h | --help)
       _help
       exit 0
       ;;
-    -y | --yes)
+    --yes)
       ASSUME_YES=1
       shift
       ;;
@@ -838,10 +853,6 @@ while [ $# -gt 0 ]; do
       OLDER_THAN="$2"
       shift 2
       ;;
-    --older-than=*)
-      OLDER_THAN="${1#*=}"
-      shift
-      ;;
     --quick)
       QUICK_MODE=1
       shift
@@ -852,10 +863,6 @@ while [ $# -gt 0 ]; do
       fi
       JOBS="$2"
       shift 2
-      ;;
-    --jobs=*)
-      JOBS="${1#*=}"
-      shift
       ;;
     --no-gc)
       RUN_GC=0
@@ -879,13 +886,6 @@ while [ $# -gt 0 ]; do
       fi
       ADD_CRON_ENTRY="$*"
       break
-      ;;
-    --add-cron=*)
-      ADD_CRON_ENTRY="${1#*=}"
-      if [ -z "$ADD_CRON_ENTRY" ]; then
-        ADD_CRON_ENTRY=$(_default_cron_command)
-      fi
-      shift
       ;;
     --)
       shift
@@ -966,7 +966,10 @@ if [ -n "$ADD_CRON_ENTRY" ]; then
 fi
 
 if [ "$GC_ONLY" -eq 1 ]; then
-  _run_gc
+  if ! _run_gc; then
+    echo "Garbage collection failed." >&2
+    exit 1
+  fi
   echo "Garbage collection complete."
   exit 0
 fi
@@ -975,10 +978,10 @@ discovery_start=$(_now_epoch)
 candidates_file=$(mktemp)
 
 if [ "$QUICK_DEFAULTED_SYSTEM" -eq 1 ]; then
-  echo "Quick mode default: using --system target."
+  echo "Quick mode default: using --system target." >&2
 fi
 if [ "$QUICK_DEFAULTED_NO_GC" -eq 1 ]; then
-  echo "Quick mode default: skipping final GC (--no-gc)."
+  echo "Quick mode default: skipping final GC (--no-gc)." >&2
 fi
 
 if [ -n "$OLDER_THAN" ]; then

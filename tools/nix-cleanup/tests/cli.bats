@@ -17,8 +17,8 @@ _write_mock_sudo() {
   local dir=$1
 
   cat > "$dir/sudo" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 if [ "${1:-}" = "-v" ]; then
   exit 0
@@ -37,8 +37,8 @@ _write_mock_crontab() {
   local dir=$1
 
   cat > "$dir/crontab" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 state_file="${CRONTAB_MOCK_FILE:?CRONTAB_MOCK_FILE must be set}"
 
@@ -66,18 +66,43 @@ _write_mock_find_empty() {
   local dir=$1
 
   cat > "$dir/find" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 exit 0
 EOF
   chmod +x "$dir/find"
 }
 
-@test "--help succeeds" {
+@test "--help and -h succeed without diagnostics" {
+  local stdout="$TEST_TMPDIR/help.stdout"
+  local stderr="$TEST_TMPDIR/help.stderr"
+
+  "$NIX_CLEANUP_BIN" --help > "$stdout" 2> "$stderr"
+
+  [ -s "$stdout" ]
+  [ ! -s "$stderr" ]
+  grep -F "clean dead nix store paths safely" "$stdout" > /dev/null
+
   run "$NIX_CLEANUP_BIN" --help
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"clean dead nix store paths safely"* ]]
+
+  run "$NIX_CLEANUP_BIN" -h
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"clean dead nix store paths safely"* ]]
+}
+
+@test "old help and yes aliases are rejected" {
+  run "$NIX_CLEANUP_BIN" help
+
+  [ "$status" -ne 0 ]
+
+  run "$NIX_CLEANUP_BIN" -y
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown option"* ]]
 }
 
 @test "--older-than rejects invalid duration" {
@@ -101,6 +126,25 @@ EOF
   [[ "$output" == *"--jobs expects a positive integer"* ]]
 }
 
+@test "option values use the canonical separated form" {
+  run "$NIX_CLEANUP_BIN" --older-than=30d
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown option"* ]]
+
+  run "$NIX_CLEANUP_BIN" --jobs=4
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown option"* ]]
+}
+
+@test "the end-of-options marker is honored" {
+  run "$NIX_CLEANUP_BIN" -- --help
+
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"unknown option: --help"* ]]
+}
+
 @test "--quick defaults to --system and --no-gc" {
   local mock_dir="$TEST_TMPDIR/mock-quick"
   mkdir -p "$mock_dir"
@@ -111,6 +155,20 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"Quick mode default: using --system target."* ]]
   [[ "$output" == *"Quick mode default: skipping final GC (--no-gc)."* ]]
+}
+
+@test "progress goes to stderr while a no-op result uses stdout" {
+  local mock_dir="$TEST_TMPDIR/mock-output"
+  local stdout="$TEST_TMPDIR/quick.stdout"
+  local stderr="$TEST_TMPDIR/quick.stderr"
+  mkdir -p "$mock_dir"
+  _write_mock_find_empty "$mock_dir"
+
+  env PATH="$mock_dir:$PATH" "$NIX_CLEANUP_BIN" --quick > "$stdout" 2> "$stderr"
+
+  grep -F "Summary: candidates=0" "$stdout" > /dev/null
+  grep -F "Quick mode default: using --system target." "$stderr" > /dev/null
+  grep -F "Discovering candidates from /nix/store..." "$stderr" > /dev/null
 }
 
 @test "--add-cron normalizes plain commands to @daily" {

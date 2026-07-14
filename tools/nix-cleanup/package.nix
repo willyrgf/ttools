@@ -40,6 +40,8 @@ pkgs.symlinkJoin {
       --set NIX_CLEANUP_ARG0 "${toolName}"
   '';
 
+  passthru.unwrapped = unwrapped;
+
   meta = {
     description = "Safely remove dead Nix store paths and optionally run garbage collection.";
     mainProgram = toolName;

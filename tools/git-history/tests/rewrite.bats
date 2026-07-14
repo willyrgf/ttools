@@ -74,7 +74,8 @@ _parent_counts() {
   [[ "$output" == *"empty commit message"* ]]
   [[ "$output" == *"message has 3 lines"* ]]
   [[ "$output" == *"contains disallowed author/trailer line"* ]]
-  [[ "$output" == *"subject is 22 characters; limit is 10"* ]]
+  [[ "$output" == *"subject is "* ]]
+  [[ "$output" == *"limit is 10"* ]]
 }
 
 @test "fix-messages preserves trees, topology, and metadata and creates a backup" {

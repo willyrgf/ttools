@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-COMMAND="review"
+COMMAND=""
 BASE_REF=""
-MAX_SUBJECT_LENGTH="${MAX_SUBJECT_LENGTH:-}"
+MAX_SUBJECT_LENGTH=""
 TRUNCATE_LONG=0
 MESSAGE_PREFIX=""
 PREFIX_SET=0
@@ -11,11 +11,11 @@ MESSAGES_CHANGED=0
 TMP_DIR=""
 
 usage() {
-  cat <<'USAGE'
+  cat << 'USAGE'
 Usage:
-  ./git-history.sh review [--base <rev>] [--max-subject-length <n>]
-  ./git-history.sh fix-messages [--base <rev>] [--max-subject-length <n>] [--truncate-long]
-  ./git-history.sh add-prefix <prefix> [--base <rev>]
+  git-history review [--base <rev>] [--max-subject-length <n>]
+  git-history fix-messages [--base <rev>] [--max-subject-length <n>] [--truncate-long]
+  git-history add-prefix <prefix> [--base <rev>]
 
 Operates on commits made on the current branch, defined as:
   merge-base(<base>, HEAD)..HEAD
@@ -32,6 +32,9 @@ The review and fix-messages commands use these message rules:
 The add-prefix command adds the literal, case-sensitive prefix to the subject of
 every selected commit that does not already start with it. Message bodies are
 left unchanged, so the operation is idempotent.
+
+The review command is read-only. The fix-messages and add-prefix commands create
+a backup branch before moving the current branch and rewrite selected history.
 
 History-changing commands keep the exact final tree and commit topology, and
 preserve author and committer identities and timestamps. They create a backup
@@ -51,7 +54,7 @@ Notes:
   here means no author/co-author/trailer text inside commit messages.
 
   Prefixes are literal. Quote a prefix containing spaces, for example:
-    ./git-history.sh add-prefix 'cleanup: ' --base origin/dev
+    git-history add-prefix 'cleanup: ' --base origin/dev
 
   Rewriting signed commits or commits with unusual extra headers is refused
   because those headers cannot be preserved faithfully by this script.
@@ -86,9 +89,9 @@ is_disallowed_line() {
   lower="${line,,}"
 
   case "$lower" in
-    author:*|authors:*|co-authored-by:*|signed-off-by:*|reviewed-by:*|\
-acked-by:*|tested-by:*|reported-by:*|suggested-by:*|committed-by:*|\
-committer:*|pair-programmed-by:*|change-id:*)
+    author:* | authors:* | co-authored-by:* | signed-off-by:* | reviewed-by:* | \
+      acked-by:* | tested-by:* | reported-by:* | suggested-by:* | committed-by:* | \
+      committer:* | pair-programmed-by:* | change-id:*)
       return 0
       ;;
     *)
@@ -141,7 +144,7 @@ message_violations() {
     printf 'message has %s lines after trailing blanks are ignored\n' "$line_count"
   fi
 
-  if [[ -n "$MAX_SUBJECT_LENGTH" ]] && (( subject_len > MAX_SUBJECT_LENGTH )); then
+  if [[ -n "$MAX_SUBJECT_LENGTH" ]] && ((subject_len > MAX_SUBJECT_LENGTH)); then
     printf 'subject is %s characters; limit is %s\n' "$subject_len" "$MAX_SUBJECT_LENGTH"
   fi
 
@@ -210,8 +213,8 @@ sanitize_message() {
     return 1
   fi
 
-  if [[ -n "$MAX_SUBJECT_LENGTH" ]] && (( ${#subject} > MAX_SUBJECT_LENGTH )); then
-    if (( TRUNCATE_LONG )); then
+  if [[ -n "$MAX_SUBJECT_LENGTH" ]] && ((${#subject} > MAX_SUBJECT_LENGTH)); then
+    if ((TRUNCATE_LONG)); then
       subject="$(truncate_subject "$subject")"
     else
       return 2
@@ -240,46 +243,35 @@ add_prefix_to_message() {
 }
 
 parse_args() {
-  if (($#)) && [[ "$1" != -* ]]; then
-    COMMAND="$1"
-    shift
+  if (($# == 0)); then
+    die "a command is required: review, fix-messages, or add-prefix"
   fi
 
-  case "$COMMAND" in
-    review|fix-messages|add-prefix)
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    review | fix-messages | add-prefix)
+      COMMAND="$1"
+      shift
       ;;
     *)
-      die "unknown command: $COMMAND"
+      die "unknown command: $1"
       ;;
   esac
 
   while (($#)); do
     case "$1" in
-      --review)
-        COMMAND="review"
-        shift
-        ;;
-      --fix)
-        COMMAND="fix-messages"
-        shift
-        ;;
       --base)
         [[ $# -ge 2 ]] || die "--base requires a revision"
         BASE_REF="$2"
         shift 2
         ;;
-      --base=*)
-        BASE_REF="${1#--base=}"
-        shift
-        ;;
       --max-subject-length)
         [[ $# -ge 2 ]] || die "--max-subject-length requires a number"
         MAX_SUBJECT_LENGTH="$2"
         shift 2
-        ;;
-      --max-subject-length=*)
-        MAX_SUBJECT_LENGTH="${1#--max-subject-length=}"
-        shift
         ;;
       --truncate-long)
         TRUNCATE_LONG=1
@@ -287,14 +279,14 @@ parse_args() {
         ;;
       --)
         shift
-        if [[ "$COMMAND" == "add-prefix" ]] && (( ! PREFIX_SET )) && (($#)); then
+        if [[ "$COMMAND" == "add-prefix" ]] && ((!PREFIX_SET)) && (($#)); then
           MESSAGE_PREFIX="$1"
           PREFIX_SET=1
           shift
         fi
         (($# == 0)) || die "unexpected argument: $1"
         ;;
-      -h|--help)
+      -h | --help)
         usage
         exit 0
         ;;
@@ -302,7 +294,7 @@ parse_args() {
         die "unknown option: $1"
         ;;
       *)
-        if [[ "$COMMAND" == "add-prefix" ]] && (( ! PREFIX_SET )); then
+        if [[ "$COMMAND" == "add-prefix" ]] && ((!PREFIX_SET)); then
           MESSAGE_PREFIX="$1"
           PREFIX_SET=1
           shift
@@ -313,23 +305,23 @@ parse_args() {
     esac
   done
 
-  [[ -z "$MAX_SUBJECT_LENGTH" || "$MAX_SUBJECT_LENGTH" =~ ^[1-9][0-9]*$ ]] \
-    || die "--max-subject-length must be a positive integer"
+  [[ -z "$MAX_SUBJECT_LENGTH" || "$MAX_SUBJECT_LENGTH" =~ ^[1-9][0-9]*$ ]] ||
+    die "--max-subject-length must be a positive integer"
 
   if [[ "$COMMAND" == "add-prefix" ]]; then
-    (( PREFIX_SET )) || die "add-prefix requires a prefix"
+    ((PREFIX_SET)) || die "add-prefix requires a prefix"
     [[ -n "$MESSAGE_PREFIX" ]] || die "prefix must not be empty"
-    [[ "$MESSAGE_PREFIX" != *$'\n'* && "$MESSAGE_PREFIX" != *$'\r'* ]] \
-      || die "prefix must be a single line"
-    [[ -z "$MAX_SUBJECT_LENGTH" ]] \
-      || die "--max-subject-length is not supported by add-prefix"
+    [[ "$MESSAGE_PREFIX" != *$'\n'* && "$MESSAGE_PREFIX" != *$'\r'* ]] ||
+      die "prefix must be a single line"
+    [[ -z "$MAX_SUBJECT_LENGTH" ]] ||
+      die "--max-subject-length is not supported by add-prefix"
   fi
 
-  if (( TRUNCATE_LONG )) && [[ -z "$MAX_SUBJECT_LENGTH" ]]; then
+  if ((TRUNCATE_LONG)) && [[ -z "$MAX_SUBJECT_LENGTH" ]]; then
     die "--truncate-long requires --max-subject-length"
   fi
 
-  if (( TRUNCATE_LONG )) && [[ "$COMMAND" != "fix-messages" ]]; then
+  if ((TRUNCATE_LONG)) && [[ "$COMMAND" != "fix-messages" ]]; then
     die "--truncate-long is only supported by fix-messages"
   fi
 }
@@ -338,26 +330,26 @@ resolve_base_ref() {
   local ref
 
   if [[ -n "$BASE_REF" ]]; then
-    git rev-parse --verify --quiet "$BASE_REF^{commit}" >/dev/null \
-      || die "base revision is not a commit: $BASE_REF"
+    git rev-parse --verify --quiet "$BASE_REF^{commit}" > /dev/null ||
+      die "base revision is not a commit: $BASE_REF"
     printf '%s\n' "$BASE_REF"
     return
   fi
 
-  ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-  if [[ -n "$ref" ]] && git rev-parse --verify --quiet "$ref^{commit}" >/dev/null; then
+  ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2> /dev/null || true)"
+  if [[ -n "$ref" ]] && git rev-parse --verify --quiet "$ref^{commit}" > /dev/null; then
     printf '%s\n' "$ref"
     return
   fi
 
   for ref in origin/main origin/master main master trunk; do
-    if git rev-parse --verify --quiet "$ref^{commit}" >/dev/null; then
+    if git rev-parse --verify --quiet "$ref^{commit}" > /dev/null; then
       printf '%s\n' "$ref"
       return
     fi
   done
 
-  if git rev-parse --verify --quiet '@{upstream}^{commit}' >/dev/null; then
+  if git rev-parse --verify --quiet '@{upstream}^{commit}' > /dev/null; then
     printf '%s\n' '@{upstream}'
     return
   fi
@@ -371,8 +363,8 @@ load_branch_commits() {
   local merge_base_var="$3"
   local found_merge_base
 
-  found_merge_base="$(git merge-base "$base_ref" HEAD)" \
-    || die "base revision $base_ref has no merge base with HEAD"
+  found_merge_base="$(git merge-base "$base_ref" HEAD)" ||
+    die "base revision $base_ref has no merge base with HEAD"
   mapfile -t "$commits_var" \
     < <(git rev-list --reverse --topo-order "$found_merge_base..HEAD")
   printf -v "$merge_base_var" '%s' "$found_merge_base"
@@ -385,7 +377,7 @@ review_commits() {
   local failed=0
   local commit short subject_file violations_file subject
 
-  printf 'Reviewing %s commit(s) in %s..HEAD\n' "${#commits[@]}" "$base_ref"
+  printf 'Reviewing %s commit(s) in %s..HEAD\n' "${#commits[@]}" "$base_ref" >&2
 
   if ((${#commits[@]} == 0)); then
     printf 'OK: no branch commits found.\n'
@@ -412,13 +404,13 @@ review_commits() {
 }
 
 ensure_rewrite_preconditions() {
-  git symbolic-ref --quiet --short HEAD >/dev/null \
-    || die "$COMMAND requires a checked-out branch, not detached HEAD"
+  git symbolic-ref --quiet --short HEAD > /dev/null ||
+    die "$COMMAND requires a checked-out branch, not detached HEAD"
 
-  git diff --quiet \
-    || die "$COMMAND requires no unstaged tracked changes"
-  git diff --cached --quiet \
-    || die "$COMMAND requires no staged changes"
+  git diff --quiet ||
+    die "$COMMAND requires no unstaged tracked changes"
+  git diff --cached --quiet ||
+    die "$COMMAND requires no staged changes"
 }
 
 ensure_supported_commit_headers() {
@@ -433,8 +425,7 @@ ensure_supported_commit_headers() {
       header="${line%% *}"
 
       case "$header" in
-        tree|parent|author|committer)
-          ;;
+        tree | parent | author | committer) ;;
         *)
           die "commit $short has unsupported '$header' metadata; history was not rewritten"
           ;;
@@ -464,8 +455,7 @@ precompute_messages() {
         set -e
 
         case "$rc" in
-          0)
-            ;;
+          0) ;;
           1)
             failed=1
             printf 'Cannot derive a non-author one-line subject for %s\n' "$short" >&2
@@ -516,21 +506,21 @@ verify_created_commit() {
   local expected_parents="$3"
   local actual_parents generated_message
 
-  [[ "$(read_commit_header "$old_commit" tree)" == "$(read_commit_header "$new_commit" tree)" ]] \
-    || die "tree changed while rewriting $old_commit"
-  [[ "$(read_commit_header "$old_commit" author)" == "$(read_commit_header "$new_commit" author)" ]] \
-    || die "author metadata changed while rewriting $old_commit"
-  [[ "$(read_commit_header "$old_commit" committer)" == "$(read_commit_header "$new_commit" committer)" ]] \
-    || die "committer metadata changed while rewriting $old_commit"
+  [[ "$(read_commit_header "$old_commit" tree)" == "$(read_commit_header "$new_commit" tree)" ]] ||
+    die "tree changed while rewriting $old_commit"
+  [[ "$(read_commit_header "$old_commit" author)" == "$(read_commit_header "$new_commit" author)" ]] ||
+    die "author metadata changed while rewriting $old_commit"
+  [[ "$(read_commit_header "$old_commit" committer)" == "$(read_commit_header "$new_commit" committer)" ]] ||
+    die "committer metadata changed while rewriting $old_commit"
 
   actual_parents="$(git show -s --format=%P "$new_commit")"
-  [[ "$actual_parents" == "$expected_parents" ]] \
-    || die "parent topology changed while rewriting $old_commit"
+  [[ "$actual_parents" == "$expected_parents" ]] ||
+    die "parent topology changed while rewriting $old_commit"
 
   generated_message="$TMP_DIR/generated-message-$new_commit"
   extract_commit_message "$new_commit" "$generated_message"
-  cmp -s "$TMP_DIR/messages/$old_commit" "$generated_message" \
-    || die "message changed unexpectedly while rewriting $old_commit"
+  cmp -s "$TMP_DIR/messages/$old_commit" "$generated_message" ||
+    die "message changed unexpectedly while rewriting $old_commit"
 }
 
 create_backup_branch() {
@@ -592,12 +582,12 @@ rewrite_commits() {
 
     new_commit="$(
       GIT_AUTHOR_NAME="$author_name" \
-      GIT_AUTHOR_EMAIL="$author_email" \
-      GIT_AUTHOR_DATE="$author_date" \
-      GIT_COMMITTER_NAME="$committer_name" \
-      GIT_COMMITTER_EMAIL="$committer_email" \
-      GIT_COMMITTER_DATE="$committer_date" \
-      git commit-tree "$tree" "${parent_args[@]}" -F "$TMP_DIR/messages/$commit"
+        GIT_AUTHOR_EMAIL="$author_email" \
+        GIT_AUTHOR_DATE="$author_date" \
+        GIT_COMMITTER_NAME="$committer_name" \
+        GIT_COMMITTER_EMAIL="$committer_email" \
+        GIT_COMMITTER_DATE="$committer_date" \
+        git commit-tree "$tree" "${parent_args[@]}" -F "$TMP_DIR/messages/$commit"
     )"
 
     verify_created_commit "$commit" "$new_commit" "$mapped_parents"
@@ -607,8 +597,8 @@ rewrite_commits() {
     fi
   done
 
-  [[ -f "$TMP_DIR/map/$original_head" ]] \
-    || die "could not map the original branch head"
+  [[ -f "$TMP_DIR/map/$original_head" ]] ||
+    die "could not map the original branch head"
   new_head="$(cat "$TMP_DIR/map/$original_head")"
   backup_branch="$(create_backup_branch "$current_branch" "$original_head")"
   git update-ref "refs/heads/$current_branch" "$new_head" "$original_head"
@@ -626,8 +616,8 @@ verify_prefixes() {
     extract_commit_message "$commit" "$message_file"
     subject=""
     IFS= read -r subject < "$message_file" || true
-    [[ "$subject" == "$MESSAGE_PREFIX"* ]] \
-      || die "prefix verification failed for $commit"
+    [[ "$subject" == "$MESSAGE_PREFIX"* ]] ||
+      die "prefix verification failed for $commit"
   done
 
   printf 'OK: all %s selected commit message(s) start with the prefix.\n' "$#"
@@ -639,8 +629,8 @@ main() {
 
   parse_args "$@"
 
-  git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-    || die "not inside a git worktree"
+  git rev-parse --is-inside-work-tree > /dev/null 2>&1 ||
+    die "not inside a git worktree"
   git_root="$(git rev-parse --show-toplevel)"
   cd "$git_root"
 
@@ -648,22 +638,22 @@ main() {
   base_ref="$(resolve_base_ref)"
   load_branch_commits "$base_ref" commits merge_base
 
-  printf 'Base: %s\n' "$base_ref"
-  printf 'Merge base: %s\n' "$merge_base"
+  printf 'Base: %s\n' "$base_ref" >&2
+  printf 'Merge base: %s\n' "$merge_base" >&2
 
   case "$COMMAND" in
     review)
       review_commits "$base_ref" "${commits[@]}"
       ;;
-    fix-messages|add-prefix)
+    fix-messages | add-prefix)
       if ((${#commits[@]} == 0)); then
         printf 'OK: no branch commits found.\n'
         exit 0
       fi
-      precompute_messages "${commits[@]}" \
-        || die "not rewriting history because some commits need manual input"
+      precompute_messages "${commits[@]}" ||
+        die "not rewriting history because some commits need manual input"
 
-      if (( MESSAGES_CHANGED == 0 )); then
+      if ((MESSAGES_CHANGED == 0)); then
         printf 'OK: no commit messages need to change.\n'
         exit 0
       fi
