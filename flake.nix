@@ -1,5 +1,5 @@
 {
-  description = "nix-cleanup is a script that cleans up the nix environment.";
+  description = "A small collection of useful command-line tools.";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs";
   inputs.flake-utils.url = "github:numtide/flake-utils";
@@ -9,121 +9,212 @@
       let
         pkgs = import nixpkgs { inherit system; };
         inherit (pkgs) lib;
+        toolRoot = ./tools;
         flakeCommit = self.rev or (self.dirtyRev or "unknown");
-        runtimePackages = [
-          pkgs.coreutils
-          pkgs.cron
-          pkgs.findutils
-          pkgs.gawk
-          pkgs.gitMinimal
-          pkgs.gnugrep
-          pkgs.nix
-        ];
-        qualityOnlyPackages = [
+        reservedToolNames = [ "default" "help" "list" "version" ];
+        directoryEntries = builtins.readDir toolRoot;
+
+        validateToolName = toolName:
+          if builtins.match "[a-z][a-z0-9]*(-[a-z0-9]+)*" toolName == null then
+            throw "invalid tool name '${toolName}': use lowercase kebab-case"
+          else if lib.elem toolName reservedToolNames then
+            throw "reserved tool name '${toolName}' cannot be used"
+          else
+            toolName;
+
+        validateToolLayout = toolName:
+          let
+            toolDirectory = toolRoot + "/${toolName}";
+          in
+          if !(builtins.pathExists (toolDirectory + "/package.nix")) then
+            throw "tool '${toolName}' is missing package.nix"
+          else if !(builtins.pathExists (toolDirectory + "/check.nix")) then
+            throw "tool '${toolName}' is missing check.nix"
+          else
+            toolName;
+
+        toolNames =
+          lib.sort builtins.lessThan
+            (map validateToolLayout
+              (map validateToolName
+                (lib.filter
+                  (toolName: directoryEntries.${toolName} == "directory")
+                  (builtins.attrNames directoryEntries))));
+
+        toolPackages = lib.genAttrs toolNames (toolName:
+          import (toolRoot + "/${toolName}/package.nix") {
+            inherit pkgs lib toolName flakeCommit;
+          });
+
+        toolChecks = lib.genAttrs toolNames (toolName:
+          import (toolRoot + "/${toolName}/check.nix") {
+            inherit pkgs lib toolName;
+            package = toolPackages.${toolName};
+          });
+
+        toolInfo = lib.mapAttrs (_toolName: package: {
+          description = package.meta.description;
+          program = lib.getExe package;
+        }) toolPackages;
+
+        catalogLines = lib.concatStringsSep "\n" (map (toolName:
+          "  printf '  %s\\n' ${lib.escapeShellArg "${toolName} - ${toolInfo.${toolName}.description}"}"
+        ) toolNames);
+
+        dispatchCases = lib.concatStringsSep "\n" (map (toolName:
+          ''
+            ${toolName})
+              exec "${toolInfo.${toolName}.program}" "$@"
+              ;;
+          ''
+        ) toolNames);
+
+        toolsEntrypoint = pkgs.writeShellScriptBin "tools" ''
+          set -euo pipefail
+
+          _catalog() {
+            printf '%s\n' 'Available tools:'
+          ${catalogLines}
+          }
+
+          _usage() {
+            printf '%s\n' 'tools - a collection of useful command-line tools.'
+            printf '\n'
+            _catalog
+            printf '\n'
+            printf '%s\n' 'Usage:'
+            printf '%s\n' '  tools'
+            printf '%s\n' '  tools list'
+            printf '%s\n' '  tools --help'
+            printf '%s\n' '  tools <tool-name> [args...]'
+          }
+
+          _error() {
+            printf 'error: %s\n' "$*" >&2
+          }
+
+          if [ "$#" -eq 0 ]; then
+            _usage
+            exit 0
+          fi
+
+          case "$1" in
+            -h|--help|help)
+              _usage
+              exit 0
+              ;;
+            list)
+              _catalog
+              exit 0
+              ;;
+          esac
+
+          tool="$1"
+          shift
+          case "$tool" in
+          ${dispatchCases}
+            *)
+              _error "unknown tool: $tool"
+              exit 1
+              ;;
+          esac
+        '';
+        dispatcherProgram = "${toolsEntrypoint}/bin/tools";
+        qualityPackages = [
           pkgs.actionlint
+          pkgs.bash
           pkgs.bats
+          pkgs.coreutils
           pkgs.deadnix
+          pkgs.findutils
           pkgs.shellcheck
           pkgs.shfmt
           pkgs.statix
         ];
-        qualityPackages = runtimePackages ++ qualityOnlyPackages;
-        runtimePath = lib.makeBinPath runtimePackages;
-        qualityPath = lib.makeBinPath qualityPackages;
-        nix-cleanup-unwrapped = pkgs.stdenvNoCC.mkDerivation rec {
-          pname = "nix-cleanup";
-          version = "0.0.1";
-          src = ./.;
 
-          nativeBuildInputs = [ pkgs.bash ];
-
-          installPhase = ''
-            runHook preInstall
-            mkdir -p "$out/bin"
-            substitute ${pname}.sh "$out/bin/${pname}" \
-              --replace-fail "/usr/bin/env bash" "${pkgs.bash}/bin/bash" \
-              --replace-fail "__NIX_CLEANUP_FLAKE_COMMIT__" "${flakeCommit}"
-            chmod +x "$out/bin/${pname}"
-            runHook postInstall
-          '';
-        };
-        nix-cleanup = pkgs.symlinkJoin {
-          name = "nix-cleanup";
-          paths = [ nix-cleanup-unwrapped ];
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-
-          postBuild = ''
-            wrapProgram "$out/bin/nix-cleanup" \
-              --prefix PATH : "${runtimePath}" \
-              --set NIX_CLEANUP_ARG0 nix-cleanup
-          '';
-        };
         mkRepoCheck = name: command:
-          pkgs.runCommand name
-            {
-              src = ./.;
-              nativeBuildInputs = [ pkgs.bash ];
-            }
-            ''
-              export PATH=${qualityPath}:$PATH
-              cd "$src"
-              ${command}
-              touch "$out"
-            '';
+          pkgs.runCommand name {
+            src = ./.;
+            nativeBuildInputs = qualityPackages;
+          } ''
+            cd "$src"
+            ${command}
+            touch "$out"
+          '';
       in
       {
-        packages = {
-          inherit nix-cleanup;
-          default = nix-cleanup;
+        packages = toolPackages // {
+          default = toolsEntrypoint;
         };
-        defaultPackage = nix-cleanup;
 
         apps.default = {
           type = "app";
-          program = "${nix-cleanup}/bin/nix-cleanup";
-          meta.description = "Clean dead nix store paths safely";
+          program = dispatcherProgram;
         };
 
-        checks = {
-          bash-syntax = mkRepoCheck "bash-syntax" "bash -n nix-cleanup.sh";
-          shellcheck = mkRepoCheck "shellcheck" "shellcheck -x nix-cleanup.sh";
-          shfmt = mkRepoCheck "shfmt" "shfmt -d -i 2 -ci -sr nix-cleanup.sh";
-          actionlint = mkRepoCheck "actionlint" "actionlint .github/workflows/nix-checks.yml";
-          statix = mkRepoCheck "statix" "statix check .";
-          deadnix = mkRepoCheck "deadnix" "deadnix .";
-          runtime-smoke = mkRepoCheck "runtime-smoke" "env -i HOME=$TMPDIR PATH=/nonexistent ${nix-cleanup}/bin/nix-cleanup --help > /dev/null";
-          bats = pkgs.runCommand "bats-tests"
-            {
-              src = ./.;
-              nativeBuildInputs = [ pkgs.bash pkgs.bats ];
-              NIX_CLEANUP_BIN = "${nix-cleanup-unwrapped}/bin/nix-cleanup";
-            }
-            ''
-              export PATH=${qualityPath}:$PATH
-              cd "$src"
-              bats --tap tests/cli.bats
-              touch "$out"
-            '';
+        checks = toolChecks // {
+          repo-bash-syntax = mkRepoCheck "repo-bash-syntax" ''
+            while IFS= read -r -d $'\0' source; do
+              bash -n "$source"
+            done < <(find tools -type f -name '*.sh' -print0)
+          '';
+          repo-shellcheck = mkRepoCheck "repo-shellcheck" ''
+            find tools -type f -name '*.sh' -print0 | xargs -0 -r shellcheck -x
+          '';
+          repo-shfmt = mkRepoCheck "repo-shfmt" ''
+            find tools -type f -name '*.sh' -print0 | xargs -0 -r shfmt -d -i 2 -ci -sr
+          '';
+          repo-actionlint = mkRepoCheck "repo-actionlint" ''
+            actionlint .github/workflows/nix-checks.yml
+          '';
+          repo-statix = mkRepoCheck "repo-statix" ''
+            statix check .
+          '';
+          repo-deadnix = mkRepoCheck "repo-deadnix" ''
+            deadnix .
+          '';
+          repo-dispatcher-smoke = pkgs.runCommand "repo-dispatcher-smoke" {
+            src = ./.;
+            nativeBuildInputs = [ pkgs.coreutils ];
+          } ''
+            set -euo pipefail
+            cd "$src"
+
+            help_output="$(${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" --help)"
+            case "$help_output" in
+              *"Available tools:"*"git-history"*"nix-cleanup"*) ;;
+              *)
+                printf '%s\n' "dispatcher help output is incomplete" >&2
+                exit 1
+                ;;
+            esac
+
+            list_output="$(${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" list)"
+            first_tool="$(printf '%s\n' "$list_output" | sed -n '2p')"
+            second_tool="$(printf '%s\n' "$list_output" | sed -n '3p')"
+            [ "$first_tool" = "  git-history - Review and deliberately rewrite selected Git history." ]
+            [ "$second_tool" = "  nix-cleanup - Safely remove dead Nix store paths and optionally run garbage collection." ]
+
+            ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" git-history --help > "$TMPDIR/git-history-help"
+            ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" PATH=/nonexistent "${dispatcherProgram}" nix-cleanup --help > "$TMPDIR/nix-cleanup-help"
+            grep -F 'Usage:' "$TMPDIR/git-history-help" > /dev/null
+            grep -F 'Usage:' "$TMPDIR/nix-cleanup-help" > /dev/null
+
+            if "${dispatcherProgram}" unknown-tool > "$TMPDIR/unknown-out" 2> "$TMPDIR/unknown-error"; then
+              printf '%s\n' "unknown dispatcher tool unexpectedly succeeded" >&2
+              exit 1
+            fi
+            grep -Fx 'error: unknown tool: unknown-tool' "$TMPDIR/unknown-error" > /dev/null
+            touch "$out"
+          '';
         };
 
         devShells = {
-          runtime = pkgs.mkShell {
-            packages = runtimePackages;
-            shellHook = ''
-              export NIX_CLEANUP_BIN="${nix-cleanup}/bin/nix-cleanup"
-            '';
-          };
           quality = pkgs.mkShell {
             packages = qualityPackages;
-            shellHook = ''
-              export NIX_CLEANUP_BIN="${nix-cleanup}/bin/nix-cleanup"
-            '';
           };
           default = pkgs.mkShell {
             packages = qualityPackages;
-            shellHook = ''
-              export NIX_CLEANUP_BIN="${nix-cleanup}/bin/nix-cleanup"
-            '';
           };
         };
       });
