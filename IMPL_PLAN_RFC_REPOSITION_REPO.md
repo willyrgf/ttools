@@ -28,6 +28,8 @@ implementation choice:
    explicitly before claiming compliance. Do not invent a silent substitute.
 6. Commit subjects are concise, lowercase, one-line messages. Do not add a
    commit body or author, co-author, review, or other trailer metadata.
+7. If architecture/design decisions are unclear, spawn an architect-agent 
+   and pass these rules along.
 
 ## Current baseline
 
@@ -145,7 +147,9 @@ compatibility paths.
 ## CLI implementation rules
 
 Each tool owns its parser and safety behavior. Apply the RFC's conventions
-without creating a shared parser.
+without creating a shared parser. These are final-state requirements; the
+behavior changes are intentionally applied in the late conformance phase after
+the package, dispatcher, fixture, and quality foundations are working.
 
 Every tool must:
 
@@ -262,30 +266,7 @@ nix run . -- nix-cleanup --help
 nix run . -- git-history --help
 ```
 
-### Phase 3: normalize tool CLI contracts
-
-Apply the CLI rules to both scripts without creating shared parsing code:
-
-- make help output use the packaged executable name;
-- route errors, diagnostics, and progress to stderr;
-- make `--help`, `-h`, `--`, and invalid-argument behavior explicit and tested;
-- remove the old `nix-cleanup help` and `-y` aliases;
-- require explicit `git-history` subcommands;
-- remove `git-history --review` and `--fix` aliases;
-- remove unnecessary `--option=value` parsing branches; and
-- keep safety behavior visible in each tool's help text.
-
-Do not change domain semantics while normalizing the interface. In particular,
-do not make cleanup tests touch a real store or history tests touch this
-repository.
-
-Suggested commit:
-
-```text
-normalize tool cli contracts
-```
-
-### Phase 4: add fixture-based tool checks
+### Phase 3: add fixture-based tool checks
 
 `tools/nix-cleanup/check.nix` should run the moved Bats suite against the
 packaged cleanup executable. Preserve mocks for `find`, `sudo`, and `crontab`,
@@ -312,7 +293,7 @@ Suggested commit:
 add history rewrite fixtures
 ```
 
-### Phase 5: consolidate repository quality checks
+### Phase 4: consolidate repository quality checks
 
 Make the root flake compose per-tool checks plus repository-wide checks:
 
@@ -332,6 +313,47 @@ Suggested commit:
 
 ```text
 consolidate repository quality checks
+```
+
+### Phase 5: apply initial tool conformance
+
+Do this after packaging, dispatch, fixture coverage, and repository-wide checks
+are working. The goal is to turn the initial tools into precise examples for
+future tools, without introducing shared parsing code.
+
+For `nix-cleanup`:
+
+- make help output use the packaged executable name;
+- route errors, diagnostics, and progress to stderr while keeping normal
+  results on stdout;
+- keep only `-h` and `--help` as help forms, removing the positional `help`
+  alias;
+- remove the `-y` alias and document `--yes` as the safety flag;
+- keep the canonical `--option <value>` form and remove duplicate
+  `--option=value` parsing branches; and
+- add tests for `--`, invalid arguments, exit status, and side-effect-free
+  validation.
+
+For `git-history`:
+
+- require an explicit `review`, `fix-messages`, or `add-prefix` subcommand;
+- remove the implicit default `review` command and `--review`/`--fix` aliases;
+- keep the canonical `--option <value>` form and remove duplicate
+  `--option=value` parsing branches;
+- make help output use the packaged executable name;
+- route errors, diagnostics, and progress to stderr while keeping review and
+  successful command results on stdout; and
+- add tests for `-h`, `--help`, `--`, invalid arguments, exit status, and
+  mutation-free validation.
+
+Do not change domain semantics while normalizing the interfaces. Do not add
+generic flags merely for symmetry, and do not make cleanup tests touch a real
+store or history tests touch this repository.
+
+Suggested commit:
+
+```text
+normalize initial tool cli contracts
 ```
 
 ### Phase 6: rewrite documentation and CI

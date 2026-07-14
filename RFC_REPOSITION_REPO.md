@@ -150,6 +150,44 @@ with `nix-cleanup`, just as `nix-cleanup --jobs`, `--older-than`, and `--no-gc`
 need not appear on other tools. The common convention is about semantics and
 documentation, not about making every tool expose the same flags.
 
+## Initial tool conformance
+
+Moving the existing scripts into `tools/` is not sufficient. After the package
+and dispatcher architecture is working, the migration should apply the shared
+conventions to the initial tools and make them the reference implementations
+for future tools. This is a deliberate late migration phase so packaging and
+CLI conformance can be reviewed separately.
+
+For `nix-cleanup`, the conformance work should:
+
+- make help output use the packaged executable name;
+- send errors, diagnostics, and progress to standard error while keeping normal
+  results on standard output;
+- keep `-h` and `--help` as the help forms and remove the positional `help`
+  alias;
+- remove the `-y` alias so `--yes` is the documented safety flag;
+- use the canonical `--option <value>` form and remove duplicate
+  `--option=value` parsing branches; and
+- test `--`, invalid arguments, exit status, and side-effect-free validation.
+
+For `git-history`, the conformance work should:
+
+- require an explicit `review`, `fix-messages`, or `add-prefix` subcommand;
+- remove the implicit default `review` command and undocumented `--review` and
+  `--fix` aliases;
+- use the canonical `--option <value>` form and remove duplicate
+  `--option=value` parsing branches;
+- make help output use the packaged executable name;
+- send errors, diagnostics, and progress to standard error while keeping review
+  results and successful command results on standard output; and
+- test `-h`, `--help`, `--`, invalid arguments, exit status, and mutation-free
+  validation.
+
+The conformance phase must not introduce a shared parser or make the
+dispatcher interpret tool-specific flags. It must update each tool's local
+help, tests, and safety documentation together. No generic flags should be
+added merely for symmetry.
+
 ## Repository layout
 
 ```text
@@ -349,11 +387,16 @@ itself must not add or reinterpret tool-specific safety flags such as
    and fixture-based tests together.
 3. Replace the current single-tool flake wiring with convention-driven tool
    discovery and generated dispatch.
-4. Add the default `tools` app and package outputs for discovered tools.
-5. Update the README, CI workflow, development shells, and examples.
-6. Validate the local commands before renaming the GitHub repository to
+4. Add the default `tools` app, package outputs, and deterministic checks for
+   discovered tools.
+5. Apply the initial-tool conformance changes to both CLIs and update their
+   tests to make the conventions executable examples.
+6. Update the README, AGENTS guidance, CI workflow, development shells, and
+   examples to describe the final interfaces.
+7. Validate the local commands before renaming the GitHub repository to
    `tools`.
-7. Add future utilities as new `tools/<name>/` directories.
+8. Add future utilities as new `tools/<name>` directories that follow the
+   package, check, CLI, and safety conventions.
 
 The new canonical cleanup command is:
 
