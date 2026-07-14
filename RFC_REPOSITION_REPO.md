@@ -416,10 +416,10 @@ Because the latter two commands change commit IDs, documentation should
 recommend an explicit `--base` and make the generated backup branch visible in
 the command's safety guidance.
 
-Existing callers of `github:willyrgf/nix-cleanup` must be migrated to the new
-dispatcher or direct package path. The old default-app behavior is intentionally
-not preserved, and the repository must not add a compatibility wrapper or
-legacy mode.
+Existing callers of the former repository URL must be migrated to the new
+`github:willyrgf/ttools` dispatcher or direct package path. The old default-app
+behavior is intentionally not preserved, and the repository must not add a
+compatibility wrapper or legacy mode.
 
 ## Open decisions
 
