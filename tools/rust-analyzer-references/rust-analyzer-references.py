@@ -302,6 +302,7 @@ class LspClient:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
+        prog="rust-analyzer-references",
         description=(
             "Report Rust definitions with an exact rust-analyzer workspace "
             "reference count."

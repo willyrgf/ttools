@@ -15,8 +15,7 @@ impl Widget {
 }
 
 fn exercise() {
-  let _ = "🦀";
-  used_public();
+  let _ = "🦀"; used_public();
   let _one = OneUse;
   let _two_a = TwoUse;
   let _two_b = TwoUse;

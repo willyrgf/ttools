@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -124,6 +125,8 @@ def references(name: str, path: Path, lines: list[str]) -> list[dict]:
 
 
 def main() -> int:
+    retry_method = os.environ.get("RUST_ANALYZER_REFERENCES_RETRY_METHOD")
+    retried = False
     while True:
         try:
             message = read_message()
@@ -134,6 +137,20 @@ def main() -> int:
         if request_id is None:
             if method == "exit":
                 return 0
+            continue
+        if (
+            retry_method
+            and method == f"textDocument/{retry_method}"
+            and not retried
+        ):
+            retried = True
+            send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32801, "message": "analyzer is busy"},
+                }
+            )
             continue
         if method == "initialize":
             send({"jsonrpc": "2.0", "id": request_id, "result": {}})

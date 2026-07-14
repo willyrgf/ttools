@@ -5,6 +5,7 @@ setup() {
   mkdir -p "$workspace"
   cp "$RUST_ANALYZER_REFERENCES_FIXTURE" "$workspace/sample.rs"
   export RUST_ANALYZER_REFERENCES_FAKE_RA="$RUST_ANALYZER_REFERENCES_FAKE_SOURCE"
+  unset RUST_ANALYZER_REFERENCES_RETRY_METHOD
 }
 
 run_tool() {
@@ -27,6 +28,20 @@ run_tool() {
 
   [ "$status" -eq 2 ]
   [[ "$output" == *"unknown kind(s): nope"* ]]
+}
+
+@test "negative counts fail validation" {
+  run run_tool --kinds function --count -1
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--count must be non-negative"* ]]
+}
+
+@test "missing scan paths fail validation" {
+  run run_tool --kinds function --count 0 missing.rs
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"scan path does not exist: missing.rs"* ]]
 }
 
 @test "zero-reference exported functions and methods are reported" {
@@ -64,6 +79,37 @@ data = json.load(sys.stdin)
 names = {item["name"] for item in data["matches"]}
 assert names == {"OneUse"}, names
 assert data["matches"][0]["references"][0]["column"] > 1
+'
+}
+
+@test "busy reference requests are retried" {
+  export RUST_ANALYZER_REFERENCES_RETRY_METHOD=references
+  run run_tool --kinds function --visibility exported --count 1 --output json
+
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+names = {item["name"] for item in data["matches"]}
+assert names == {"used_public"}, names
+'
+}
+
+@test "UTF-16 reference columns are converted to display columns" {
+  run run_tool --kinds function --visibility exported --count 1 --output json
+
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+reference = data["matches"][0]["references"][0]
+assert reference["path"] == "sample.rs"
+assert reference["line"] == 18
+assert reference["column"] == 16
 '
 }
 
