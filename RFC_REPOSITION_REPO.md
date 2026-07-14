@@ -9,7 +9,7 @@ Reposition the current `nix-cleanup` repository as a small collection of useful
 tools published from `github:willyrgf/tools`.
 
 The repository has one public entrypoint. The default Nix app is a dispatcher
-named `tools`:
+named `tools`, initially exposing `nix-cleanup` and `git-history`:
 
 ```bash
 nix run 'github:willyrgf/tools'
@@ -30,6 +30,8 @@ should not require editing a command list or a manually maintained registry.
 - Keep each tool's dependencies, help text, tests, and safety behavior local.
 - Make the root command able to list the available tools automatically.
 - Preserve direct Nix package outputs for users who need one tool specifically.
+- Include both system cleanup and Git history maintenance without coupling
+  their implementations or runtime dependencies.
 - Keep the flake and repository structure small enough to understand at a glance.
 
 ## Non-goals
@@ -51,6 +53,18 @@ tools list                    List available tools.
 tools --help                 Show dispatcher help.
 tools <tool-name> [args...]  Execute one tool and pass arguments through.
 ```
+
+The initial catalog is:
+
+- `nix-cleanup`: safely remove dead Nix store paths and optionally run garbage
+  collection.
+- `git-history`: review commits on the current branch and, when explicitly
+  requested, normalize commit messages or add a subject prefix.
+
+`git-history review` is read-only. Its `fix-messages` and `add-prefix`
+commands rewrite selected history, create a backup branch before moving the
+current branch, and preserve the final tree, commit topology, and author and
+committer metadata.
 
 The dispatcher owns only its first argument. Once a tool name is selected, all
 remaining arguments, standard input, standard output, standard error, and the
@@ -76,6 +90,12 @@ tools/
     package.nix                  Tool derivation.
     tests/
       cli.bats                   Tool-specific tests.
+  git-history/
+    git-history.sh               Tool source.
+    package.nix                  Tool derivation.
+    tests/
+      cli.bats                   Help and argument-validation tests.
+      rewrite.bats               Fixture-based history rewrite tests.
   another-tool/
     main.py
     package.nix
@@ -119,6 +139,12 @@ The contract is intentionally narrow:
 The existing `nix-cleanup` runtime wrapper, pinned `PATH`, and flake-commit
 display remain specific to `tools/nix-cleanup/package.nix`. They should not
 become global behavior of the repository dispatcher.
+
+`tools/git-history/package.nix` should expose the source as `git-history` and
+bundle Bash, Git, and the standard text/file utilities it invokes (`awk`,
+`sed`, `mktemp`, and related core utilities). The tool must continue to run
+against the caller's Git worktree, while its executable and runtime tools come
+from its Nix package rather than the ambient `PATH`.
 
 ## Flake discovery and generated dispatcher
 
@@ -184,6 +210,7 @@ The flake should also expose individual packages:
 
 ```bash
 nix run 'github:willyrgf/tools#nix-cleanup' -- --quick
+nix run 'github:willyrgf/tools#git-history' -- review --base origin/main
 ```
 
 That provides a smaller escape hatch for a tool with a large language runtime.
@@ -208,26 +235,54 @@ nix run . -- <tool-name> --help
 nix flake check --print-build-logs --show-trace
 ```
 
-Destructive tools must use mocks or fixtures for tests. The dispatcher itself
-must not add or reinterpret destructive flags such as `--yes`.
+For the initial tools, this includes non-destructive smoke and argument checks
+for both `nix-cleanup` and `git-history`, plus:
+
+```bash
+bash -n tools/git-history/git-history.sh
+nix run . -- git-history --help
+nix run . -- git-history review --base <rev>
+```
+
+`git-history` rewrite tests must create temporary Git repositories and use an
+explicit base revision. They should verify message validation, prefix
+idempotence, preservation of trees/topology/identities, and creation of the
+backup branch without rewriting this repository's history. Destructive or
+history-changing tools must use mocks or fixtures for tests. The dispatcher
+itself must not add or reinterpret tool-specific safety flags such as
+`nix-cleanup --yes`.
 
 ## Migration plan
 
 1. Create `tools/nix-cleanup/` and move its source, package logic, and tests
    together.
-2. Replace the current single-tool flake wiring with convention-driven tool
+2. Create `tools/git-history/` and move `git-history.sh`, its package logic,
+   and fixture-based tests together.
+3. Replace the current single-tool flake wiring with convention-driven tool
    discovery and generated dispatch.
-3. Add the default `tools` app and package outputs for discovered tools.
-4. Update the README, CI workflow, development shells, and examples.
-5. Validate the local commands before renaming the GitHub repository to
+4. Add the default `tools` app and package outputs for discovered tools.
+5. Update the README, CI workflow, development shells, and examples.
+6. Validate the local commands before renaming the GitHub repository to
    `tools`.
-6. Add future utilities as new `tools/<name>/` directories.
+7. Add future utilities as new `tools/<name>/` directories.
 
 The new canonical cleanup command is:
 
 ```bash
 nix run 'github:willyrgf/tools' -- nix-cleanup --older-than 30d
 ```
+
+The initial Git history commands are:
+
+```bash
+nix run 'github:willyrgf/tools' -- git-history review --base origin/main
+nix run 'github:willyrgf/tools' -- git-history fix-messages --base origin/main --max-subject-length 72
+nix run 'github:willyrgf/tools' -- git-history add-prefix 'cleanup: ' --base origin/main
+```
+
+Because the latter two commands change commit IDs, documentation should
+recommend an explicit `--base` and make the generated backup branch visible in
+the command's safety guidance.
 
 If existing cron jobs or scripts depend on
 `github:willyrgf/nix-cleanup` being a direct cleanup app, keep a temporary
@@ -243,4 +298,3 @@ default-app behavior after this repository becomes a dispatcher.
   layout settles.
 - The closure-size threshold at which individual `#tool` execution becomes the
   preferred documented path.
-
