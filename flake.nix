@@ -23,10 +23,8 @@
             toolName;
 
         validateToolLayout = toolName:
-          let
-            toolDirectory = toolRoot + "/${toolName}";
-          in
-          if !(builtins.pathExists (toolDirectory + "/README.md")) then
+          let toolDirectory = toolRoot + "/${toolName}";
+          in if !(builtins.pathExists (toolDirectory + "/README.md")) then
             throw "tool '${toolName}' is missing README.md"
           else if !(builtins.pathExists (toolDirectory + "/package.nix")) then
             throw "tool '${toolName}' is missing package.nix"
@@ -35,13 +33,10 @@
           else
             toolName;
 
-        toolNames =
-          lib.sort builtins.lessThan
-            (map validateToolLayout
-              (map validateToolName
-                (lib.filter
-                  (toolName: directoryEntries.${toolName} == "directory")
-                  (builtins.attrNames directoryEntries))));
+        toolNames = lib.sort builtins.lessThan (map validateToolLayout
+          (map validateToolName
+            (lib.filter (toolName: directoryEntries.${toolName} == "directory")
+              (builtins.attrNames directoryEntries))));
 
         toolPackages = lib.genAttrs toolNames (toolName:
           import (toolRoot + "/${toolName}/package.nix") {
@@ -60,16 +55,16 @@
         }) toolPackages;
 
         catalogLines = lib.concatStringsSep "\n" (map (toolName:
-          "  printf '  %s\\n' ${lib.escapeShellArg "${toolName} - ${toolInfo.${toolName}.description}"}"
-        ) toolNames);
+          "  printf '  %s\\n' ${
+              lib.escapeShellArg
+              "${toolName} - ${toolInfo.${toolName}.description}"
+            }") toolNames);
 
-        dispatchCases = lib.concatStringsSep "\n" (map (toolName:
-          ''
-            ${toolName})
-              exec "${toolInfo.${toolName}.program}" "$@"
-              ;;
-          ''
-        ) toolNames);
+        dispatchCases = lib.concatStringsSep "\n" (map (toolName: ''
+          ${toolName})
+            exec "${toolInfo.${toolName}.program}" "$@"
+            ;;
+        '') toolNames);
 
         ttoolsEntrypoint = pkgs.writeShellScriptBin "ttools" ''
           set -euo pipefail
@@ -126,17 +121,15 @@
           inherit pkgs lib;
           src = ./.;
         };
-      in
-      {
-        packages = toolPackages // {
-          default = ttoolsEntrypoint;
-        };
+      in {
+        packages = toolPackages // { default = ttoolsEntrypoint; };
 
         apps = quality.apps // {
           default = {
             type = "app";
             program = dispatcherProgram;
-            meta.description = "Generated ttools dispatcher for the repository's tiny tools.";
+            meta.description =
+              "Generated ttools dispatcher for the repository's tiny tools.";
           };
         };
 
@@ -178,12 +171,8 @@
         };
 
         devShells = {
-          quality = pkgs.mkShell {
-            packages = quality.devPackages;
-          };
-          default = pkgs.mkShell {
-            packages = quality.devPackages;
-          };
+          quality = pkgs.mkShell { packages = quality.devPackages; };
+          default = pkgs.mkShell { packages = quality.devPackages; };
         };
       });
 }

@@ -76,6 +76,10 @@ in {
       find tools -type f -name '*.sh' -print0 | xargs -0 -r shfmt -d -i 2 -ci -sr
     '';
 
+    repo-nixfmt = mkRepoCheck "repo-nixfmt" ''
+      find . -type f -name '*.nix' -print0 | xargs -0 -r nixfmt --check
+    '';
+
     repo-actionlint = mkRepoCheck "repo-actionlint" ''
       actionlint .github/workflows/nix-checks.yml
     '';

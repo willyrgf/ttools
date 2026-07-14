@@ -2,12 +2,7 @@
 
 pkgs.runCommand "${toolName}-check" {
   src = ./.;
-  nativeBuildInputs = [
-    pkgs.bash
-    pkgs.bats
-    pkgs.coreutils
-    pkgs.gitMinimal
-  ];
+  nativeBuildInputs = [ pkgs.bash pkgs.bats pkgs.coreutils pkgs.gitMinimal ];
   GIT_HISTORY_BIN = lib.getExe package;
 } ''
   cd "$src"

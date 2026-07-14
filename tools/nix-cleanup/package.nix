@@ -28,8 +28,7 @@ let
       runHook postInstall
     '';
   };
-in
-pkgs.symlinkJoin {
+in pkgs.symlinkJoin {
   name = toolName;
   paths = [ unwrapped ];
   nativeBuildInputs = [ pkgs.makeWrapper ];
@@ -43,7 +42,8 @@ pkgs.symlinkJoin {
   passthru.unwrapped = unwrapped;
 
   meta = {
-    description = "Safely remove dead Nix store paths and optionally run garbage collection.";
+    description =
+      "Safely remove dead Nix store paths and optionally run garbage collection.";
     mainProgram = toolName;
   };
 }
