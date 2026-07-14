@@ -26,7 +26,9 @@
           let
             toolDirectory = toolRoot + "/${toolName}";
           in
-          if !(builtins.pathExists (toolDirectory + "/package.nix")) then
+          if !(builtins.pathExists (toolDirectory + "/README.md")) then
+            throw "tool '${toolName}' is missing README.md"
+          else if !(builtins.pathExists (toolDirectory + "/package.nix")) then
             throw "tool '${toolName}' is missing package.nix"
           else if !(builtins.pathExists (toolDirectory + "/check.nix")) then
             throw "tool '${toolName}' is missing check.nix"

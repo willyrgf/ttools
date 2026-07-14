@@ -8,10 +8,11 @@ of self-contained tools:
 - `flake.nix` discovers and packages immediate `tools/<name>` directories,
   generates the `ttools` dispatcher, and composes quality checks.
 - `tools/<name>/<source>` contains one public tool and its implementation.
+- `tools/<name>/README.md` documents that tool's usage and safety behavior.
 - `tools/<name>/package.nix` returns the executable package for that tool.
 - `tools/<name>/check.nix` returns the deterministic local quality check.
 - `tools/<name>/tests/` contains tool-specific Bats suites and fixtures.
-- `README.md` documents user-facing commands and safety boundaries.
+- `README.md` is the compact project landing page and tool index.
 - `docs/code-quality.md` is the repository quality policy.
 - `RFC_REPOSITION_REPO.md` and `IMPL_PLAN_RFC_REPOSITION_REPO.md` define the
   target architecture and implementation requirements.
@@ -54,8 +55,8 @@ the test suites to rewrite this repository's history.
 ## Tool package contract
 
 Each immediate child of `tools/` is a lowercase kebab-case public tool and must
-contain both `package.nix` and `check.nix`. The package function has this
-contract:
+contain `README.md`, `package.nix`, and `check.nix`. The package function has
+this contract:
 
 ```nix
 { pkgs, lib, toolName, flakeCommit ? "unknown" }:

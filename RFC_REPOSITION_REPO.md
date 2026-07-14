@@ -197,12 +197,14 @@ README.md
 tools/
   nix-cleanup/
     nix-cleanup.sh              Tool source.
+    README.md                   Usage and safety documentation.
     package.nix                  Tool derivation.
     check.nix                   Tool quality check derivation.
     tests/
       cli.bats                   Tool-specific tests.
   git-history/
     git-history.sh               Tool source.
+    README.md                    Usage and safety documentation.
     package.nix                  Tool derivation.
     check.nix                   Tool quality check derivation.
     tests/
@@ -210,14 +212,18 @@ tools/
       rewrite.bats               Fixture-based history rewrite tests.
   another-tool/
     main.py
+    README.md
     package.nix
+    check.nix
     tests/
 ```
 
 Each immediate child directory of `tools/` is one tool. A directory is valid
-only when it contains both `package.nix` and `check.nix`. Shared repository
-code, if it becomes necessary, belongs outside `tools/<name>` and should be
-introduced only after repetition is demonstrated.
+only when it contains `README.md`, `package.nix`, and `check.nix`. The local
+README owns the tool's usage and safety documentation; the root README remains
+a compact index. Shared repository code, if it becomes necessary, belongs
+outside `tools/<name>` and should be introduced only after repetition is
+demonstrated.
 
 ## Tool package contract
 
@@ -242,6 +248,7 @@ The contract is intentionally narrow:
 
 - `meta.description` is a concise, single-line catalog description.
 - `meta.mainProgram` identifies the executable to dispatch.
+- `README.md` documents the tool's usage, options, output, and safety boundary.
 - The derivation must produce an executable program.
 - The package owns all runtime dependencies; it must not rely on ambient host
   language runtimes or tools.
@@ -268,8 +275,8 @@ from its Nix package rather than the ambient `PATH`.
 ## Flake discovery and generated dispatcher
 
 The flake should use `builtins.readDir` to enumerate the immediate children of
-`./tools`, retain directories, validate that each contains `package.nix` and
-`check.nix`, and sort the names for deterministic output.
+`./tools`, retain directories, validate that each contains `README.md`,
+`package.nix`, and `check.nix`, and sort the names for deterministic output.
 
 Conceptually:
 
@@ -391,7 +398,8 @@ itself must not add or reinterpret tool-specific safety flags such as
    discovered tools.
 5. Apply the initial-tool conformance changes to both CLIs and update their
    tests to make the conventions executable examples.
-6. Update the README, AGENTS guidance, CI workflow, development shells, and
+6. Keep the root README as a compact index, add a usage/safety README to each
+   tool, and update AGENTS guidance, CI workflow, development shells, and
    examples to describe the final interfaces.
 7. Validate the local commands before renaming the GitHub repository to
    `ttools`.

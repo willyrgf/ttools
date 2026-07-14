@@ -63,12 +63,14 @@ docs/
 tools/
   nix-cleanup/
     nix-cleanup.sh
+    README.md
     package.nix
     check.nix
     tests/
       cli.bats
   git-history/
     git-history.sh
+    README.md
     package.nix
     check.nix
     tests/
@@ -83,8 +85,8 @@ hand-maintained tool registry. The public dispatcher is named `ttools`; the
 
 ### Package boundary
 
-Each immediate child of `tools/` is one public tool and must contain both
-`package.nix` and `check.nix`.
+Each immediate child of `tools/` is one public tool and must contain
+`README.md`, `package.nix`, and `check.nix`.
 
 `package.nix` follows the RFC contract:
 
@@ -100,6 +102,10 @@ shared shell runtime, parser, registry, or cross-language build framework.
 derivation. It owns test-specific dependencies and runs tests located in the
 same tool directory. This keeps new tools self-contained while ensuring every
 discovered tool has CI coverage.
+
+Each tool's `README.md` owns its usage, options, output, and safety
+documentation. The root `README.md` is only the concise ttools landing page and
+tool index.
 
 Use `pkgs.writeShellApplication` or the smallest equivalent Nix wrapper for
 the Bash tools. It should provide a pinned runtime `PATH` from the tool's own
@@ -239,7 +245,7 @@ Replace the single-tool flake wiring with convention-driven discovery:
 
 - enumerate only immediate directories under `tools/`;
 - sort tool names;
-- fail evaluation when a tool lacks `package.nix` or `check.nix`;
+- fail evaluation when a tool lacks `README.md`, `package.nix`, or `check.nix`;
 - reject invalid or reserved names;
 - import packages with `flakeCommit` available;
 - import each tool's `check.nix` with its package derivation;
@@ -359,7 +365,9 @@ normalize initial tool cli contracts
 
 ### Phase 6: rewrite documentation and CI
 
-Rewrite `README.md` around the `ttools` dispatcher and tiny-tools identity:
+Rewrite the root `README.md` as a compact ttools landing page and tiny-tools
+index. Add a `README.md` to each tool directory containing its help-derived
+usage, options, examples, and safety guidance:
 
 - catalog and `list` behavior;
 - direct package outputs;
